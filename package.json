@@ -2,17 +2,14 @@
   "name": "vibesec",
   "displayName": "VibeSec by Anuwa Labs",
   "description": "Advanced security scanning for your workspace",
-  "version": "1.0.0",
-  "publisher": "anuwa-labs",
+  "version": "0.0.1",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -20,7 +17,7 @@
         {
           "id": "vibesec",
           "title": "VibeSec",
-          "icon": "resources/icon.svg"
+          "icon": "media/icon.svg"
         }
       ]
     },
@@ -30,46 +27,47 @@
           "type": "webview",
           "id": "vibesec.dashboardView",
           "name": "Security Dashboard",
-          "icon": "resources/icon.svg"
+          "icon": "media/icon.svg"
         }
       ]
     },
     "commands": [
       {
         "command": "vibesec.runScan",
-        "title": "VibeSec: Run Security Scan",
+        "title": "Run Security Scan",
         "category": "VibeSec"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run build",
-    "build": "npm run build:extension && npm run build:webview",
-    "build:extension": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
-    "build:webview": "rollup -c",
-    "watch": "npm run build:extension -- --watch",
-    "package": "vsce package"
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^28.0.8",
-    "@rollup/plugin-node-resolve": "^16.0.3",
-    "@rollup/plugin-typescript": "^12.1.4",
-    "@tsconfig/svelte": "^5.0.5",
     "@types/archiver": "^6.0.3",
-    "@types/node": "^24.8.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
     "@types/vscode": "^1.105.0",
-    "esbuild": "^0.25.11",
-    "rollup": "^4.52.5",
-    "rollup-plugin-css-only": "^4.5.5",
-    "rollup-plugin-svelte": "^7.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "css-loader": "^7.1.2",
+    "eslint": "^9.36.0",
+    "style-loader": "^4.0.0",
     "svelte": "^5.41.0",
-    "svelte-check": "^4.3.3",
     "svelte-loader": "^3.2.4",
     "svelte-preprocess": "^6.0.3",
     "ts-loader": "^9.5.4",
-    "tslib": "^2.8.1",
     "typescript": "^5.9.3",
-    "webpack": "^5.102.1",
+    "webpack": "^5.102.0",
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
