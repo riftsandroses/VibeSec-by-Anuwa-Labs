@@ -11,7 +11,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:vibesec.dashboard"
+    
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -28,15 +28,17 @@
       "vibesec": [
         {
           "type": "webview",
-          "id": "vibesec.dashboard",
-          "name": "Dashboard"
+          "id": "vibesec.dashboardView",
+          "name": "Security Dashboard",
+          "icon": "resources/icon.svg"
         }
       ]
     },
     "commands": [
       {
-        "command": "vibesec.showDashboard",
-        "title": "VibeSec: Show Dashboard"
+        "command": "vibesec.runScan",
+        "title": "VibeSec: Run Security Scan",
+        "category": "VibeSec"
       }
     ]
   },
