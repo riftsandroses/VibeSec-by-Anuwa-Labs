@@ -23,13 +23,16 @@ const extensionConfig = {
                 exclude: /node_modules/,
                 use: [
                     {
-                        loader: 'ts-loader'
+                        loader: 'ts-loader',
+                        options: {
+                            configFile: path.resolve(__dirname, 'tsconfig.json')
+                        }
                     }
                 ]
             }
         ]
     },
-    devtool: 'nosources-source-map',
+    devtool: 'source-map',
     infrastructureLogging: {
         level: "log"
     }
@@ -37,26 +40,38 @@ const extensionConfig = {
 
 const webviewConfig = {
     target: 'web',
-    mode: 'none',
+    mode: 'development',
     entry: './src/webview/main.ts',
     output: {
         path: path.resolve(__dirname, 'dist'),
-        filename: 'webview.js'
+        filename: 'webview.js',
+        clean: false
     },
     resolve: {
         alias: {
-            svelte: path.resolve('node_modules', 'svelte/src/runtime')
+            svelte: path.resolve('node_modules', 'svelte'),
+            'svelte/internal': path.resolve('node_modules', 'svelte/src/internal'),
+            'svelte/internal/disclose-version': path.resolve('node_modules', 'svelte/src/internal/client/dev/hmr.js')
         },
         extensions: ['.mjs', '.js', '.ts', '.svelte'],
         mainFields: ['svelte', 'browser', 'module', 'main'],
-        conditionNames: ['svelte', 'browser', 'import']
+        conditionNames: ['svelte', 'browser'],
+        fallback: {
+            'svelte/internal/disclose-version': false
+        }
     },
     module: {
         rules: [
             {
                 test: /\.ts$/,
                 exclude: /node_modules/,
-                use: 'ts-loader'
+                use: {
+                    loader: 'ts-loader',
+                    options: {
+                        configFile: path.resolve(__dirname, 'tsconfig.json'),
+                        transpileOnly: true
+                    }
+                }
             },
             {
                 test: /\.svelte$/,
@@ -64,13 +79,15 @@ const webviewConfig = {
                     loader: 'svelte-loader',
                     options: {
                         compilerOptions: {
-                            dev: false,
-                            runes: true,
+                            dev: true,
+                            css: 'injected',
+                            hydratable: false,
+                            runes: true
                         },
-                        emitCss: true,
+                        emitCss: false,
                         hotReload: false,
                         preprocess: sveltePreprocess({
-                            sourceMap: false,
+                            sourceMap: true,
                             typescript: {
                                 tsconfigFile: './tsconfig.json'
                             }
@@ -83,14 +100,14 @@ const webviewConfig = {
                 use: ['style-loader', 'css-loader']
             },
             {
-                test: /node_modules\/svelte\/.*\.mjs$/,
+                test: /node_modules\/svelte\/.*\.(mjs|js)$/,
                 resolve: {
                     fullySpecified: false
                 }
             }
         ]
     },
-    devtool: 'nosources-source-map'
+    devtool: 'source-map'
 };
 
 module.exports = [extensionConfig, webviewConfig];
