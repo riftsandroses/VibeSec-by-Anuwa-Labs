@@ -1,9 +1,9 @@
 {
   "name": "vibesec",
   "displayName": "VibeSec",
-  "description": "Security scanning extension by Anuwa Labs",
+  "description": "Security scanning, remediation and code patching extension by Anuwa Labs",
   "version": "1.0.0",
-  "publisher": "AnuwaLabs",
+  "publisher": "anuwa-labs",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -12,58 +12,70 @@
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
+  "icon": "media/icon.png",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "vibesec",
+          "id": "vibesec-sidebar",
           "title": "VibeSec",
-          "icon": "$(shield)"
+          "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "vibesec": [
+      "vibesec-sidebar": [
         {
           "type": "webview",
-          "id": "vibesec.dashboardView",
-          "name": "Security Dashboard"
+          "id": "vibesec.sidebarView",
+          "name": "Security Dashboard",
+          "icon": "media/icon.svg"
         }
       ]
     },
     "commands": [
       {
         "command": "vibesec.runScan",
-        "title": "Run Security Scan",
-        "category": "VibeSec"
+        "title": "VibeSec: Run Security Scan"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack --mode development",
-    "watch": "webpack --mode development --watch",
+    "compile": "webpack",
+    "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "lint": "eslint src --ext ts"
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
   },
   "devDependencies": {
+    "@tsconfig/svelte": "^5.0.5",
     "@types/archiver": "^6.0.2",
-    "@types/node": "18.x",
+    "@types/jest": "^30.0.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.19.130",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/test-cli": "^0.0.4",
+    "@vscode/test-electron": "^2.3.8",
     "css-loader": "^6.8.1",
     "eslint": "^8.56.0",
     "style-loader": "^3.3.3",
-    "svelte": "^4.2.19",
+    "svelte": "^4.2.18",
+    "svelte-check": "^4.3.3",
     "svelte-loader": "^3.2.3",
-    "svelte-preprocess": "^5.1.4",
+    "svelte-preprocess": "^6.0.3",
     "ts-loader": "^9.5.1",
-    "typescript": "^5.3.3",
+    "typescript": "^5.9.3",
     "webpack": "^5.89.0",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "form-data": "^4.0.4"
   }
 }

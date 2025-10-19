@@ -1,197 +1,384 @@
 <script lang="ts">
-  let count = 0;
-  
-  function increment() {
-    count += 1;
+  import { onMount } from 'svelte';
+  import ThemeToggle from './components/ThemeToggle.svelte';
+  import Dashboard from './components/Dashboard.svelte';
+  import Profile from './components/Profile.svelte';
+
+  // 🩵 FIX 1: allow currentView to be string type (not null-only)
+  let currentView: 'dashboard' | 'profile' | null = 'dashboard';
+
+  let isAuthenticated = false;
+
+  let userData = {
+    name: '',
+    email: '',
+    profilePicture: '',
+    licenseStatus: 'Active',
+    serverHealth: 'Healthy'
+  };
+
+  let scanData = {
+    vulnerabilities: 0,
+    frameworks: [] as string[],
+    languages: [] as string[],
+    lastScan: null as string | null
+  };
+
+  const vscode = (window as any).acquireVsCodeApi();
+
+  onMount(() => {
+    // Check for stored auth
+    const state = vscode.getState();
+    if (state?.isAuthenticated) {
+      isAuthenticated = true;
+      userData = state.userData;
+      scanData = state.scanData || scanData;
+    }
+
+    // Listen for messages from extension
+    window.addEventListener('message', handleMessage);
+    
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  });
+
+  function handleMessage(event: MessageEvent) {
+    const message = event.data;
+    
+    switch (message.type) {
+      case 'scanComplete':
+        scanData = {
+          vulnerabilities: message.data.vulnerabilities || 0,
+          frameworks: message.data.frameworks || [],
+          languages: message.data.languages || [],
+          lastScan: new Date().toISOString()
+        };
+        saveState();
+        break;
+      case 'scanError':
+        console.error('Scan error:', message.error);
+        break;
+      case 'logoutComplete':
+        handleLogout();
+        break;
+    }
+  }
+
+  // 🩵 FIX 2 & 3: add proper type narrowing for FormData usage
+  function handleLogin(emailInput: FormDataEntryValue | null, passwordInput: FormDataEntryValue | null) {
+    if (typeof emailInput !== 'string' || typeof passwordInput !== 'string') {
+      console.error('Invalid login data');
+      return;
+    }
+
+    const email = emailInput;
+    const password = passwordInput; // currently unused
+
+    isAuthenticated = true;
+    userData = {
+      name: email.split('@')[0],
+      email,
+      profilePicture: `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}&background=1e40af&color=fff`,
+      licenseStatus: 'Active',
+      serverHealth: 'Healthy'
+    };
+    currentView = 'dashboard';
+    saveState();
+  }
+
+  function handleLogout() {
+    isAuthenticated = false;
+    userData = {
+      name: '',
+      email: '',
+      profilePicture: '',
+      licenseStatus: 'Active',
+      serverHealth: 'Healthy'
+    };
+    scanData = {
+      vulnerabilities: 0,
+      frameworks: [],
+      languages: [],
+      lastScan: null
+    };
+    vscode.setState({});
+  }
+
+  function saveState() {
+    vscode.setState({
+      isAuthenticated,
+      userData,
+      scanData
+    });
+  }
+
+  function switchView(view: 'dashboard' | 'profile') {
+    currentView = view;
   }
 </script>
 
-<div class="container">
-  <h1>🛡️ VibeSec Extension</h1>
-  <p>by Anuwa Labs</p>
-  
-  <div class="test-section">
-    <h2>Extension is Working!</h2>
-    <p>Click the button to test reactivity:</p>
-    <button on:click={increment}>
-      Clicked {count} times
-    </button>
-  </div>
-  
-  <div class="info">
-    <p>✅ Webview loaded successfully</p>
-    <p>✅ Svelte is working</p>
-    <p>✅ TypeScript is compiling</p>
-    <p>✅ Webpack bundle is loading</p>
-  </div>
+
+<div class="app">
+  {#if !isAuthenticated}
+    <div class="login-container">
+      <div class="login-header">
+        <div class="logo">
+          <div class="logo-icon">🛡️</div>
+          <h1>VibeSec</h1>
+        </div>
+        <p class="subtitle">by Anuwa Labs</p>
+      </div>
+      
+      <form on:submit|preventDefault={(e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLFormElement)) return;
+        const formData = new FormData(target);
+        handleLogin(formData.get('email'), formData.get('password'));
+      }} class="login-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required placeholder="your@email.com" />
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required placeholder="••••••••" />
+        </div>
+        
+        <button type="submit" class="btn-primary">Sign In</button>
+      </form>
+    </div>
+  {:else}
+    <div class="main-container">
+      <header class="header">
+        <div class="header-content">
+          <div class="logo-small">
+            <div class="logo-icon-small">🛡️</div>
+            <span class="logo-text">VibeSec</span>
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <nav class="nav-tabs">
+        <button 
+          class="nav-tab" 
+          class:active={currentView === 'dashboard'}
+          on:click={() => switchView('dashboard')}
+        >
+          Dashboard
+        </button>
+        <button 
+          class="nav-tab" 
+          class:active={currentView === 'profile'}
+          on:click={() => switchView('profile')}
+        >
+          Profile
+        </button>
+      </nav>
+
+      <main class="content">
+        {#if currentView === 'dashboard'}
+          <Dashboard {scanData} on:runScan />
+        {:else}
+          <Profile {userData} on:logout={() => {
+            vscode.postMessage({ type: 'logout' });
+          }} />
+        {/if}
+      </main>
+    </div>
+  {/if}
 </div>
 
 <style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    font-family: var(--vscode-font-family), sans-serif;
-    background: var(--vscode-editor-background);
-    color: var(--vscode-editor-foreground);
+  .app {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
   }
 
-  .container {
+  .login-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
     padding: 2rem;
-    max-width: 600px;
-    margin: 0 auto;
+    animation: fadeIn 0.4s ease-out;
   }
 
-  h1 {
-    font-size: 2rem;
+  .login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
     margin-bottom: 0.5rem;
-    color: #3b82f6;
   }
 
-  p {
+  .logo-icon {
+    font-size: 2.5rem;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .logo h1 {
+    font-size: 2rem;
+    margin: 0;
+    color: var(--vscode-foreground);
+    font-weight: 700;
+  }
+
+  .subtitle {
     color: var(--vscode-descriptionForeground);
-    margin: 0.5rem 0;
+    margin: 0;
+    font-size: 0.9rem;
   }
 
-  .test-section {
-    margin: 2rem 0;
-    padding: 1.5rem;
-    background: var(--vscode-editor-inactiveSelectionBackground);
-    border-radius: 0.5rem;
-    border: 1px solid var(--vscode-panel-border);
+  .login-form {
+    width: 100%;
+    max-width: 320px;
   }
 
-  .test-section h2 {
-    margin-top: 0;
-    color: var(--vscode-editor-foreground);
+  .form-group {
+    margin-bottom: 1.25rem;
   }
 
-  button {
-    background: linear-gradient(135deg, #1e40af, #3b82f6);
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+  }
+
+  .form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: #1e40af;
+    box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+  }
+
+  .btn-primary {
+    width: 100%;
+    padding: 0.875rem;
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
     color: white;
     border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.5rem;
-    font-size: 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
   }
 
-  button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(30, 64, 175, 0.4);
-  }
-
-  button:active {
+  .btn-primary:active {
     transform: translateY(0);
   }
 
-  .info {
-    margin-top: 2rem;
+  .main-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--vscode-panel-border);
     padding: 1rem;
-    background: rgba(16, 185, 129, 0.1);
-    border-left: 3px solid #10b981;
-    border-radius: 0.25rem;
   }
 
-  .info p {
-    margin: 0.5rem 0;
-    color: var(--vscode-editor-foreground);
-  }
-</style>
-
-<div class="container">
-  <h1>🛡️ VibeSec Extension</h1>
-  <p>by Anuwa Labs</p>
-  
-  <div class="test-section">
-    <h2>Extension is Working!</h2>
-    <p>Click the button to test reactivity:</p>
-    <button onclick={increment}>
-      Clicked {count} times
-    </button>
-  </div>
-  
-  <div class="info">
-    <p>✅ Webview loaded successfully</p>
-    <p>✅ Svelte 5 is working</p>
-    <p>✅ TypeScript is compiling</p>
-    <p>✅ Webpack bundle is loading</p>
-  </div>
-</div>
-
-<style>
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    font-family: var(--vscode-font-family), sans-serif;
-    background: var(--vscode-editor-background);
-    color: var(--vscode-editor-foreground);
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
-  .container {
-    padding: 2rem;
-    max-width: 600px;
-    margin: 0 auto;
+  .logo-small {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
-  h1 {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-    color: #3b82f6;
+  .logo-icon-small {
+    font-size: 1.5rem;
   }
 
-  p {
-    color: var(--vscode-descriptionForeground);
-    margin: 0.5rem 0;
+  .logo-text {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--vscode-foreground);
   }
 
-  .test-section {
-    margin: 2rem 0;
-    padding: 1.5rem;
-    background: var(--vscode-editor-inactiveSelectionBackground);
-    border-radius: 0.5rem;
-    border: 1px solid var(--vscode-panel-border);
+  .nav-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding: 0 1rem;
   }
 
-  .test-section h2 {
-    margin-top: 0;
-    color: var(--vscode-editor-foreground);
-  }
-
-  button {
-    background: linear-gradient(135deg, #1e40af, #3b82f6);
-    color: white;
-    border: none;
+  .nav-tab {
     padding: 0.75rem 1.5rem;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    font-weight: 600;
+    background: none;
+    border: none;
+    color: var(--vscode-descriptionForeground);
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
   }
 
-  button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(30, 64, 175, 0.4);
+  .nav-tab:hover {
+    color: var(--vscode-foreground);
   }
 
-  button:active {
-    transform: translateY(0);
+  .nav-tab.active {
+    color: #1e40af;
+    border-bottom-color: #1e40af;
   }
 
-  .info {
-    margin-top: 2rem;
-    padding: 1rem;
-    background: rgba(16, 185, 129, 0.1);
-    border-left: 3px solid #10b981;
-    border-radius: 0.25rem;
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
   }
 
-  .info p {
-    margin: 0.5rem 0;
-    color: var(--vscode-editor-foreground);
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
   }
 </style>
