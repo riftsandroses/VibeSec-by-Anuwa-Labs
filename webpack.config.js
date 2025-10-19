@@ -64,7 +64,8 @@ const webviewConfig = {
                     loader: 'svelte-loader',
                     options: {
                         compilerOptions: {
-                            dev: false
+                            dev: false,
+                            runes: true,
                         },
                         emitCss: true,
                         hotReload: false,
