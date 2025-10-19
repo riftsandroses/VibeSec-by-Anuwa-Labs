@@ -1,0 +1,71 @@
+{
+  "name": "vibesec",
+  "displayName": "VibeSec by Anuwa Labs",
+  "description": "Advanced security scanning for your workspace",
+  "version": "1.0.0",
+  "publisher": "anuwa-labs",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:vibesec.dashboard"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibesec",
+          "title": "VibeSec",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "vibesec": [
+        {
+          "type": "webview",
+          "id": "vibesec.dashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "vibesec.showDashboard",
+        "title": "VibeSec: Show Dashboard"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "build:webview": "rollup -c",
+    "watch": "npm run build:extension -- --watch",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.8",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-typescript": "^12.1.4",
+    "@tsconfig/svelte": "^5.0.5",
+    "@types/node": "^24.8.1",
+    "@types/vscode": "^1.105.0",
+    "esbuild": "^0.25.11",
+    "rollup": "^4.52.5",
+    "rollup-plugin-css-only": "^4.5.5",
+    "rollup-plugin-svelte": "^7.2.3",
+    "svelte": "^5.41.0",
+    "svelte-check": "^4.3.3",
+    "svelte-preprocess": "^6.0.3",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1"
+  }
+}
