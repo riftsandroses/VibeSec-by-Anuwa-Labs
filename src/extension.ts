@@ -276,6 +276,10 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.css')
     );
 
+    const iconUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'resources', 'icon.svg')
+    );
+
     return `<!DOCTYPE html>
       <html lang="en">
       <head>
@@ -286,6 +290,9 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       </head>
       <body>
         <div id="app"></div>
+        <script>
+          window.ICON_URI = "${iconUri}";
+        </script>
         <script src="${scriptUri}"></script>
       </body>
       </html>`;

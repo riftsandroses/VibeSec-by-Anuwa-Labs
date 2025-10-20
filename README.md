@@ -400,8 +400,8 @@ Copyright © 2025 Anuwa Labs. All rights reserved.
 ## Support
 
 For issues, questions, or feature requests:
-- Email: support@anuwalabs.com
-- Documentation: https://docs.anuwalabs.com
+- Email: [Support E-mail Address]
+- Documentation: [Documentation URL]
 - GitHub Issues: [repository]/issues
 
 ## Acknowledgments

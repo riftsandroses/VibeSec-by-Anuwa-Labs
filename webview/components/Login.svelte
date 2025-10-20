@@ -8,6 +8,8 @@
   let password = '';
   let errors = { username: '', password: '' };
 
+  let iconSrc = window.ICON_URI;
+
   function validate() {
     errors = { username: '', password: '' };
     let isValid = true;
@@ -46,17 +48,7 @@
   <div class="login-card">
     <div class="logo-section">
       <div class="logo-icon">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <rect width="48" height="48" rx="12" fill="url(#gradient)"/>
-          <path d="M24 14L18 28H30L24 14Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="24" cy="32" r="2" fill="white"/>
-          <defs>
-            <linearGradient id="gradient" x1="0" y1="0" x2="48" y2="48">
-              <stop offset="0%" stop-color="#007AFF"/>
-              <stop offset="100%" stop-color="#5856D6"/>
-            </linearGradient>
-          </defs>
-        </svg>
+        <img src={iconSrc} alt="VibeSec Logo" width="48" height="48" />
       </div>
       <h1>VibeSec</h1>
       <p class="subtitle">by Anuwa Labs</p>
