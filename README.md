@@ -11,7 +11,7 @@ A professional VSCode extension for security testing and vulnerability scanning 
 - 🛠️ One-click vulnerability fixes
 - 👤 User profile with server health monitoring
 - 📱 Responsive portrait-oriented design
-- 🎨 Clean, modern UI inspired by Cupetino UI design language
+- 🎨 Clean, modern UI inspired by Cupertino UI design language
 
 ## Project Structure
 
