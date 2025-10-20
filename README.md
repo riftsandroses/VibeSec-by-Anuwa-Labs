@@ -1,6 +1,6 @@
-# vibesec README
+# vibesec-by-anuwa-labs README
 
-This is the README for your extension "vibesec". After writing up a brief description, we recommend including the following sections.
+This is the README for your extension "vibesec-by-anuwa-labs". After writing up a brief description, we recommend including the following sections.
 
 ## Features
 
