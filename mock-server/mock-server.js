@@ -339,7 +339,7 @@ app.listen(PORT, () => {
   console.log('  Username: demo     Password: password123');
   console.log('  Username: admin    Password: admin123');
   console.log('');
-  console.log('💡 Tip: Visit http://localhost:3000 for API info');
+  console.log('💡 Tip: Visit http://localhost:3007 for API info');
   console.log('================================');
   console.log('');
 });
