@@ -1,71 +1,415 @@
-# vibesec-by-anuwa-labs README
+# VibeSec by Anuwa Labs
 
-This is the README for your extension "vibesec-by-anuwa-labs". After writing up a brief description, we recommend including the following sections.
+A professional VSCode extension for security testing and vulnerability scanning with an elegant UI built with Svelte 4.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- 🔐 Secure authentication with JWT tokens
+- 📊 Insights Dashboard with security metrics
+- 🔍 Automated security testing of workspace
+- 📋 Detailed vulnerability analysis with tabular format
+- 🛠️ One-click vulnerability fixes
+- 👤 User profile with server health monitoring
+- 📱 Responsive portrait-oriented design
+- 🎨 Clean, modern UI inspired by Material UI design language
 
-For example if there is an image subfolder under your extension project workspace:
+## Project Structure
 
-\!\[feature X\]\(images/feature-x.png\)
+```
+vibesec/
+├── src/
+│   └── extension.ts          # Main extension file
+├── webview/
+│   ├── main.js               # Webview entry point
+│   ├── App.svelte            # Main app component
+│   ├── stores.js             # Svelte stores
+│   └── components/
+│       ├── Login.svelte      # Login screen
+│       ├── Dashboard.svelte  # Insights dashboard
+│       ├── SecurityResults.svelte  # Results screen
+│       ├── VulnerabilityTable.svelte  # Table component
+│       ├── Profile.svelte    # Profile screen
+│       └── Header.svelte     # Navigation header
+├── resources/
+│   └── icon.svg              # Extension icon
+├── package.json
+├── tsconfig.json
+├── webpack.config.js         # Extension bundler
+├── rollup.config.js          # Webview bundler
+└── README.md
+```
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Setup Instructions
 
-## Requirements
+### Prerequisites
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Node.js (v16 or higher)
+- npm or yarn
+- VSCode (v1.80 or higher)
 
-## Extension Settings
+### Installation
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd vibesec
+```
 
-For example:
+2. Install dependencies:
+```bash
+npm install
+```
 
-This extension contributes the following settings:
+3. Install additional dependencies:
+```bash
+npm install --save-dev archiver @types/archiver
+```
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### Development
 
-## Known Issues
+1. Build the webview (Svelte components):
+```bash
+npm run build:webview
+```
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+2. Build the extension:
+```bash
+npm run compile
+```
 
-## Release Notes
+3. Watch mode for development:
+```bash
+# Terminal 1 - Watch webview changes
+npm run build:webview -- --watch
 
-Users appreciate release notes as you update your extension.
+# Terminal 2 - Watch extension changes
+npm run watch
+```
 
-### 1.0.0
+4. Press `F5` in VSCode to open Extension Development Host
 
-Initial release of ...
+### Building for Production
 
-### 1.0.1
+```bash
+# Build both webview and extension
+npm run build:webview
+npm run package
+```
 
-Fixed issue #.
+## API Integration
 
-### 1.1.0
+The extension connects to the following Anuwa Labs APIs:
 
-Added features X, Y, and Z.
+### 1. Login API
+- **Endpoint**: `https://anuwalabs.com/api/v1/login`
+- **Method**: POST
+- **Body**: `{ username: string, password: string }`
+- **Response**: `{ access: string, refresh: string }`
+
+### 2. Security Testing API
+- **Endpoint**: `https://anuwalabs.com/api/v1/security-testing/`
+- **Method**: POST
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Body**: FormData with workspace zip file
+- **Response**: 
+```json
+{
+  "vulnerabilities": [
+    {
+      "name": "SQL Injection",
+      "file": "src/database.js",
+      "lines": "45-48",
+      "severity": "Critical",
+      "impact": "Allows unauthorized database access",
+      "reachability": "Reachable",
+      "description": "Detailed description...",
+      "cve": "CVE-2023-12345",
+      "recommendation": "Use parameterized queries",
+      "codeSnippet": "const query = ...",
+      "fix": "const query = db.prepare(...)"
+    }
+  ]
+}
+```
+
+### 3. Profile API
+- **Endpoint**: `https://anuwalabs.com/api/v1/profile`
+- **Method**: GET
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Response**:
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "profilePicture": "https://...",
+  "accountType": "Premium",
+  "memberSince": "2023-01-15",
+  "organization": "Anuwa Labs",
+  "serverHealth": {
+    "status": "Online",
+    "uptime": "99.9%",
+    "responseTime": "120"
+  }
+}
+```
+
+## Features Guide
+
+### Login
+- Enter credentials to authenticate
+- Tokens are stored securely during session
+- Support for password recovery and account creation
+
+### Insights Dashboard
+- View security metrics from previous scans
+- See critical, high, medium, and low severity counts
+- Track reachable vulnerabilities
+- One-click security testing
+
+### Security Testing
+- Automatically zips workspace folder
+- Uploads to Anuwa Labs API
+- Displays comprehensive results
+- Filter by severity and reachability
+
+### Vulnerability Management
+- Expandable table rows for detailed information
+- View CVE details, recommendations, and code snippets
+- One-click fixes for individual vulnerabilities
+- Bulk fix options:
+  - Fix All: Apply all suggested fixes
+  - Fix High/Critical: Fix only severe issues
+  - Fix Reachable: Fix reachable vulnerabilities
+
+### Profile
+- User information and account details
+- Server health monitoring
+- Interactive user guide
+- Settings and preferences
+
+## Customization
+
+### Theming
+The extension uses VSCode's built-in theming system. All colors adapt to the user's selected theme:
+
+- `var(--vscode-editor-background)`
+- `var(--vscode-editor-foreground)`
+- `var(--vscode-button-background)`
+- `var(--vscode-sideBar-background)`
+- etc.
+
+### API Endpoints
+Update the API URLs in `src/extension.ts`:
+
+```typescript
+const LOGIN_API = 'https://anuwalabs.com/api/v1/login';
+const SECURITY_TEST_API = 'https://anuwalabs.com/api/v1/security-testing/';
+const PROFILE_API = 'https://anuwalabs.com/api/v1/profile';
+```
+
+## Publishing
+
+1. Install vsce:
+```bash
+npm install -g @vscode/vsce
+```
+
+2. Package the extension:
+```bash
+vsce package
+```
+
+3. Publish to VSCode Marketplace:
+```bash
+vsce publish
+```
+
+## Troubleshooting
+
+### Build Issues
+- Ensure all dependencies are installed
+- Clear `node_modules` and reinstall: `rm -rf node_modules && npm install`
+- Check Node.js version: `node --version`
+
+### Extension Not Loading
+- Check VSCode version compatibility
+- Review Extension Development Host console
+- Verify `package.json` activation events
+
+### API Connection Issues
+- Verify API endpoints are accessible
+- Check network connectivity
+- Ensure proper CORS headers on API server
+- Validate token format and expiration
+
+### Webview Not Displaying
+- Check browser console in Developer Tools
+- Verify all Svelte components compile correctly
+- Ensure CSS is properly bundled
+
+## Security Considerations
+
+- Tokens are stored in memory only (not localStorage)
+- All API calls use HTTPS
+- Sensitive data never persisted to disk
+- Workspace zip is temporary and deleted after upload
+- User confirmation recommended for auto-fixes
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open Pull Request
+
+## Development Tips
+
+### Adding New Components
+
+Create new Svelte component in `webview/components/`:
+
+```svelte
+<script>
+  // Component logic
+</script>
+
+<!-- Template -->
+<div class="my-component">
+  <!-- Content -->
+</div>
+
+<style>
+  /* Scoped styles */
+  .my-component {
+    /* Use VSCode theme variables */
+    background: var(--vscode-editor-background);
+  }
+</style>
+```
+
+### Adding New API Endpoints
+
+1. Update `src/extension.ts` with new handler:
+
+```typescript
+case 'newAction':
+  await this.handleNewAction(data.params);
+  break;
+```
+
+2. Implement handler method:
+
+```typescript
+private async handleNewAction(params: any) {
+  try {
+    const response = await fetch('https://api.example.com/endpoint', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${params.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params.data)
+    });
+    
+    const data = await response.json();
+    
+    this._view?.webview.postMessage({
+      type: 'newActionSuccess',
+      data: data
+    });
+  } catch (error) {
+    this._view?.webview.postMessage({
+      type: 'newActionError',
+      error: error.message
+    });
+  }
+}
+```
+
+3. Handle response in Svelte component:
+
+```javascript
+function handleMessage(event) {
+  const message = event.data;
+  
+  switch (message.type) {
+    case 'newActionSuccess':
+      // Handle success
+      break;
+    case 'newActionError':
+      // Handle error
+      break;
+  }
+}
+```
+
+### Testing
+
+Run extension tests:
+```bash
+npm test
+```
+
+Manual testing checklist:
+- [ ] Login flow works correctly
+- [ ] Dashboard displays data
+- [ ] Security scan creates and uploads zip
+- [ ] Results table displays properly
+- [ ] Vulnerability fixes apply correctly
+- [ ] Profile loads user data
+- [ ] All navigation works
+- [ ] UI is responsive in portrait mode
+- [ ] Dark/light themes both work
+- [ ] Error handling displays appropriately
+
+## Known Limitations
+
+- Extension requires active internet connection
+- Workspace must be a folder (not individual files)
+- Large workspaces may take time to zip
+- Fix application requires write permissions
+- Token refresh not yet implemented
+
+## Future Enhancements
+
+- [ ] Automatic token refresh
+- [ ] Scan history and comparison
+- [ ] Custom scan configurations
+- [ ] Export reports (PDF, CSV)
+- [ ] Real-time vulnerability notifications
+- [ ] Integration with CI/CD pipelines
+- [ ] Collaborative vulnerability management
+- [ ] Offline mode with cached data
+- [ ] Advanced filtering and sorting
+- [ ] Vulnerability severity customization
+
+## Tech Stack
+
+- **Frontend**: Svelte 4
+- **Extension Host**: TypeScript
+- **Build Tools**: Webpack, Rollup
+- **Styling**: VSCode Theme Variables
+- **APIs**: REST with JWT authentication
+- **File Processing**: Node.js fs, archiver
+
+## License
+
+Copyright © 2025 Anuwa Labs. All rights reserved.
+
+## Support
+
+For issues, questions, or feature requests:
+- Email: support@anuwalabs.com
+- Documentation: https://docs.anuwalabs.com
+- GitHub Issues: [repository]/issues
+
+## Acknowledgments
+
+- Built with VSCode Extension API
+- Icons from Heroicons
+- Security testing powered by Anuwa Labs
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**VibeSec by Anuwa Labs** - Making your code more secure, one scan at a time.
