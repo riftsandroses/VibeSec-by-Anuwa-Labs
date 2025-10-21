@@ -3,13 +3,21 @@ import * as path from 'path';
 import * as fs from 'fs';
 import archiver from 'archiver';
 
+const TOKEN_ACCESS_KEY = 'vibesec.token.access';
+const TOKEN_REFRESH_KEY = 'vibesec.token.refresh';
+
 export function activate(context: vscode.ExtensionContext) {
-  const provider = new VibeSecViewProvider(context.extensionUri);
+  const provider = new VibeSecViewProvider(context.extensionUri, context.secrets);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'vibesec.sidebar',
-      provider
+      provider,
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true // This prevents the webview from being destroyed
+        }
+      }
     )
   );
 
@@ -18,14 +26,23 @@ export function activate(context: vscode.ExtensionContext) {
       provider.refresh();
     })
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vibesec.logout', async () => {
+      await provider.logout();
+    })
+  );
 }
 
 class VibeSecViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _secrets: vscode.SecretStorage
+  ) {}
 
-  public resolveWebviewView(
+  public async resolveWebviewView(
     webviewView: vscode.WebviewView,
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
@@ -57,11 +74,214 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         case 'getProfile':
           await this.handleGetProfile(data.tokens);
           break;
-		case 'showAlert':
-			vscode.window.showInformationMessage(data.message);
-			break;
+        case 'showAlert':
+          vscode.window.showInformationMessage(data.message);
+          break;
+        case 'logout':
+          await this.logout();
+          break;
+        case 'checkSession':
+          await this.checkExistingSession();
+          break;
       }
     });
+
+    // Check for existing session after webview is ready
+    // Small delay to ensure webview is fully initialized
+    setTimeout(() => {
+      this.checkExistingSession();
+    }, 100);
+  }
+
+  private async checkExistingSession() {
+    try {
+      const accessToken = await this._secrets.get(TOKEN_ACCESS_KEY);
+      const refreshToken = await this._secrets.get(TOKEN_REFRESH_KEY);
+
+      if (accessToken && refreshToken) {
+        console.log('Found existing tokens, validating...');
+        
+        // Try to use the token
+        const tokens = { access: accessToken, refresh: refreshToken };
+        const isValid = await this.validateAndRefreshToken(tokens);
+
+        if (isValid) {
+          // Get updated tokens (in case they were refreshed)
+          const updatedAccess = await this._secrets.get(TOKEN_ACCESS_KEY);
+          const updatedRefresh = await this._secrets.get(TOKEN_REFRESH_KEY);
+          
+          this._view?.webview.postMessage({
+            type: 'restoreSession',
+            tokens: {
+              access: updatedAccess,
+              refresh: updatedRefresh
+            }
+          });
+          console.log('Session restored successfully');
+        } else {
+          await this.clearTokens();
+          this._view?.webview.postMessage({
+            type: 'noSession'
+          });
+          console.log('Token validation failed, cleared session');
+        }
+      } else {
+        this._view?.webview.postMessage({
+          type: 'noSession'
+        });
+        console.log('No existing session found');
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+      await this.clearTokens();
+      this._view?.webview.postMessage({
+        type: 'noSession'
+      });
+    }
+  }
+
+  private async validateAndRefreshToken(tokens: { access: string; refresh: string }): Promise<boolean> {
+    try {
+      const axios = require('axios');
+      
+      // Try to use the access token
+      try {
+        const response = await axios.get('http://localhost:3007/api/v1/profile', {
+          headers: {
+            'Authorization': `Bearer ${tokens.access}`
+          }
+        });
+
+        if (response.data.success) {
+          console.log('Access token is valid');
+          return true;
+        }
+      } catch (error: any) {
+        // If 401, try to refresh the token
+        if (error.response?.status === 401) {
+          console.log('Access token expired, attempting refresh...');
+          return await this.refreshAccessToken(tokens.refresh);
+        }
+        throw error;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Token validation error:', error);
+      return false;
+    }
+  }
+
+  private async refreshAccessToken(refreshToken: string): Promise<boolean> {
+    try {
+      const axios = require('axios');
+      
+      const response = await axios.post('http://localhost:3007/api/v1/refresh', 
+        { refresh: refreshToken },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const data = response.data;
+
+      if (data.success && data.access) {
+        console.log('Token refreshed successfully');
+        // Save new access token (refresh token stays the same)
+        await this._secrets.store(TOKEN_ACCESS_KEY, data.access);
+        
+        // If a new refresh token is provided, save it too
+        if (data.refresh) {
+          await this._secrets.store(TOKEN_REFRESH_KEY, data.refresh);
+        }
+        
+        return true;
+      }
+      
+      return false;
+    } catch (error: any) {
+      console.error('Token refresh failed:', error.response?.data || error.message);
+      return false;
+    }
+  }
+
+  private async makeAuthenticatedRequest(
+    tokens: { access: string; refresh: string },
+    requestFn: (accessToken: string) => Promise<any>
+  ): Promise<any> {
+    try {
+      // Try with current access token
+      return await requestFn(tokens.access);
+    } catch (error: any) {
+      // If 401, try to refresh and retry
+      if (error.response?.status === 401) {
+        const refreshed = await this.refreshAccessToken(tokens.refresh);
+        
+        if (refreshed) {
+          // Get new access token and retry
+          const newAccessToken = await this._secrets.get(TOKEN_ACCESS_KEY);
+          if (newAccessToken) {
+            return await requestFn(newAccessToken);
+          }
+        }
+        
+        // Refresh failed, session expired
+        await this.clearTokens();
+        this._view?.webview.postMessage({
+          type: 'sessionExpired'
+        });
+        throw new Error('Session expired');
+      }
+      throw error;
+    }
+  }
+
+  private async saveTokens(access: string, refresh: string) {
+    await this._secrets.store(TOKEN_ACCESS_KEY, access);
+    await this._secrets.store(TOKEN_REFRESH_KEY, refresh);
+    console.log('Tokens saved to secure storage');
+  }
+
+  private async clearTokens() {
+    await this._secrets.delete(TOKEN_ACCESS_KEY);
+    await this._secrets.delete(TOKEN_REFRESH_KEY);
+    console.log('Tokens cleared from secure storage');
+  }
+
+  public async logout() {
+    try {
+      const accessToken = await this._secrets.get(TOKEN_ACCESS_KEY);
+      
+      if (accessToken) {
+        // Call backend logout endpoint
+        try {
+          const axios = require('axios');
+          await axios.post('http://localhost:3007/api/v1/logout', {}, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+          console.log('Backend logout successful');
+        } catch (error) {
+          console.error('Backend logout error:', error);
+          // Continue with local logout even if backend fails
+        }
+      }
+      
+      await this.clearTokens();
+      this._view?.webview.postMessage({
+        type: 'logoutSuccess'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Clear tokens anyway
+      await this.clearTokens();
+      this._view?.webview.postMessage({
+        type: 'logoutSuccess'
+      });
+    }
   }
 
   private async handleLogin(credentials: { username: string; password: string }) {
@@ -77,6 +297,8 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const data = response.data;
 
       if (data.success && data.access) {
+        await this.saveTokens(data.access, data.refresh);
+
         this._view?.webview.postMessage({
           type: 'loginSuccess',
           tokens: {
@@ -100,7 +322,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleSecurityTest(tokens: { access: string; refresh: string }) {
     try {
-      const axios = require('axios');
       const workspaceFolders = vscode.workspace.workspaceFolders;
       
       if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -115,28 +336,27 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const zipPath = path.join(workspacePath, '.vibesec-temp.zip');
 
       await this.createZipFile(workspacePath, zipPath);
-
-      // Read zip file as buffer
       const zipBuffer = fs.readFileSync(zipPath);
 
-      // Create form data
       const FormData = require('form-data');
       const formData = new FormData();
       formData.append('file', zipBuffer, 'workspace.zip');
 
-      const response = await axios.post('http://localhost:3007/api/v1/security-testing/', formData, {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`,
-          ...formData.getHeaders()
-        }
+      const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
+        const axios = require('axios');
+        const response = await axios.post('http://localhost:3007/api/v1/security-testing/', formData, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            ...formData.getHeaders()
+          }
+        });
+        return response.data;
       });
 
       // Clean up temp file
       if (fs.existsSync(zipPath)) {
         fs.unlinkSync(zipPath);
       }
-
-      const data = response.data;
 
       if (data.success && data.vulnerabilities) {
         this._view?.webview.postMessage({
@@ -152,7 +372,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     } catch (error: any) {
       this._view?.webview.postMessage({
         type: 'securityTestError',
-        error: error.response?.data?.message || error.message || 'Unknown error occurred'
+        error: error.message || 'Unknown error occurred'
       });
     }
   }
@@ -181,9 +401,8 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const document = await vscode.workspace.openTextDocument(filePath);
       const edit = new vscode.WorkspaceEdit();
 
-      // Parse line numbers (assuming format like "10-15")
       const lineRange = vulnerability.lines.split('-').map((n: string) => parseInt(n.trim()));
-      const startLine = lineRange[0] - 1; // 0-indexed
+      const startLine = lineRange[0] - 1;
       const endLine = lineRange.length > 1 ? lineRange[1] - 1 : startLine;
 
       const range = new vscode.Range(
@@ -232,15 +451,15 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGetProfile(tokens: { access: string; refresh: string }) {
     try {
-      const axios = require('axios');
-      
-      const response = await axios.get('http://localhost:3007/api/v1/profile', {
-        headers: {
-          'Authorization': `Bearer ${tokens.access}`
-        }
+      const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
+        const axios = require('axios');
+        const response = await axios.get('http://localhost:3007/api/v1/profile', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        return response.data;
       });
-
-      const data = response.data;
 
       if (data.success) {
         this._view?.webview.postMessage({
@@ -256,7 +475,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     } catch (error: any) {
       this._view?.webview.postMessage({
         type: 'profileError',
-        error: error.response?.data?.message || error.message || 'Network error occurred'
+        error: error.message || 'Network error occurred'
       });
     }
   }

@@ -12,17 +12,18 @@
         type: 'showAlert',
         message
     });
-}
-
+  }
 
   let currentView = 'login';
-  let isLoading = false;
+  let isLoading = true;
 
   onMount(() => {
-    console.log('🚀 App mounted!'); //Debug
-    console.log('Current view:', currentView);
-    // Listen for messages from extension
+    console.log('🚀 App mounted!');
+    
     window.addEventListener('message', handleMessage);
+
+    // Don't check session immediately - let the extension do it first
+    // The extension will send restoreSession or noSession message
 
     return () => {
       window.removeEventListener('message', handleMessage);
@@ -31,46 +32,90 @@
 
   function handleMessage(event) {
     const message = event.data;
-    console.log('📩 Received message:', message); //Debug
+    console.log('📩 Received message:', message);
 
     switch (message.type) {
-      case 'loginSuccess':
-        console.log('✅ Login success, tokens:', message.tokens); //Debug
+      case 'restoreSession':
+        console.log('🔄 Restoring session with tokens');
         authStore.set(message.tokens);
         currentView = 'dashboard';
         isLoading = false;
         break;
+      
+      case 'loginSuccess':
+        console.log('✅ Login success');
+        authStore.set(message.tokens);
+        currentView = 'dashboard';
+        isLoading = false;
+        break;
+      
       case 'loginError':
         showVSCodeMessage(message.error);
         isLoading = false;
         break;
+      
       case 'securityTestSuccess':
         resultsStore.set(message.results);
         currentView = 'results';
         isLoading = false;
         break;
+      
       case 'securityTestError':
         showVSCodeMessage(message.error);
         isLoading = false;
         break;
+      
       case 'profileSuccess':
         profileStore.set(message.profile);
         currentView = 'profile';
         isLoading = false;
         break;
+      
       case 'profileError':
         showVSCodeMessage(message.error);
         isLoading = false;
         break;
+      
       case 'fixSuccess':
-      case 'fixAllSuccess':
+        showVSCodeMessage('Fix applied successfully!');
         isLoading = false;
         break;
+      
+      case 'fixAllSuccess':
+        showVSCodeMessage(`${message.count || 'All'} fixes applied successfully!`);
+        isLoading = false;
+        break;
+      
       case 'fixError':
         showVSCodeMessage(message.error);
         isLoading = false;
         break;
+      
+      case 'sessionExpired':
+        console.log('⚠️ Session expired');
+        handleLogoutCleanup();
+        showVSCodeMessage('Your session has expired. Please login again.');
+        break;
+      
+      case 'logoutSuccess':
+        console.log('👋 Logout successful');
+        handleLogoutCleanup();
+        break;
+      
+      case 'noSession':
+        console.log('ℹ️ No existing session found');
+        currentView = 'login';
+        isLoading = false;
+        break;
     }
+  }
+
+  function handleLogoutCleanup() {
+    authStore.set(null);
+    resultsStore.set(null);
+    profileStore.set(null);
+    currentView = 'login';
+    isLoading = false;
   }
 
   function navigateTo(view) {
@@ -80,24 +125,41 @@
   function setLoading(loading) {
     isLoading = loading;
   }
+
+  function handleLogout() {
+    isLoading = true;
+    vscode.postMessage({ type: 'logout' });
+  }
 </script>
 
 <main class="app">
   {#if isLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>
-      <p>Processing...</p>
+      <p>Loading...</p>
     </div>
   {/if}
 
   {#if currentView === 'login'}
     <Login on:navigate={(e) => navigateTo(e.detail)} on:loading={(e) => setLoading(e.detail)} />
   {:else if currentView === 'dashboard'}
-    <Dashboard on:navigate={(e) => navigateTo(e.detail)} on:loading={(e) => setLoading(e.detail)} />
+    <Dashboard 
+      on:navigate={(e) => navigateTo(e.detail)} 
+      on:loading={(e) => setLoading(e.detail)}
+      on:logout={handleLogout}
+    />
   {:else if currentView === 'results'}
-    <SecurityResults on:navigate={(e) => navigateTo(e.detail)} on:loading={(e) => setLoading(e.detail)} />
+    <SecurityResults 
+      on:navigate={(e) => navigateTo(e.detail)} 
+      on:loading={(e) => setLoading(e.detail)}
+      on:logout={handleLogout}
+    />
   {:else if currentView === 'profile'}
-    <Profile on:navigate={(e) => navigateTo(e.detail)} on:loading={(e) => setLoading(e.detail)} />
+    <Profile 
+      on:navigate={(e) => navigateTo(e.detail)} 
+      on:loading={(e) => setLoading(e.detail)}
+      on:logout={handleLogout}
+    />
   {/if}
 </main>
 
