@@ -352,7 +352,7 @@ npm test
 ```
 
 Manual testing checklist:
-- [ ] Login flow works correctly
+- [x] Login flow works correctly
 - [ ] Dashboard displays data
 - [ ] Security scan creates and uploads zip
 - [ ] Results table displays properly
@@ -360,7 +360,7 @@ Manual testing checklist:
 - [ ] Profile loads user data
 - [ ] All navigation works
 - [ ] UI is responsive in portrait mode
-- [ ] Dark/light themes both work
+- [x] Dark/light themes both work
 - [ ] Error handling displays appropriately
 
 ## Known Limitations
@@ -369,12 +369,11 @@ Manual testing checklist:
 - Workspace must be a folder (not individual files)
 - Large workspaces may take time to zip
 - Fix application requires write permissions
-- Token refresh not yet implemented
 
 ## Future Enhancements
 
 - [x] Session pesistence when reloading extension
-- [ ] Automatic token refresh
+- [x] Automatic token refresh
 - [ ] Scan history and comparison
 - [ ] Custom scan configurations
 - [ ] Export reports (PDF, CSV)
