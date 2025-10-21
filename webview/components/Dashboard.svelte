@@ -20,7 +20,7 @@
     mediumIssues: 15,
     lowIssues: 22,
     lastScanDate: '2025-10-18',
-    reachableVulnerabilities: 5
+    exploitableVulnerabilities: 5
   };
 
   function startSecurityTest() {
@@ -115,9 +115,9 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>Reachable Vulnerabilities</span>
+          <span>exploitable Vulnerabilities</span>
         </div>
-        <div class="info-value">{insights.reachableVulnerabilities}</div>
+        <div class="info-value">{insights.exploitableVulnerabilities}</div>
       </div>
 
       <div class="info-card">

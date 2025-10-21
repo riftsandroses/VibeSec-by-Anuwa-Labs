@@ -124,7 +124,7 @@
             <div class="guide-number">4</div>
             <div class="guide-text">
               <h4>Bulk Actions</h4>
-              <p>Fix multiple vulnerabilities at once using "Fix All", "Fix High/Critical", or "Fix Reachable"</p>
+              <p>Fix multiple vulnerabilities at once using "Fix All", "Fix High/Critical", or "Fix Exploitable"</p>
             </div>
           </div>
         </div>

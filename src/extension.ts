@@ -214,8 +214,8 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       if (filter === 'highCritical') {
         return v.severity === 'High' || v.severity === 'Critical';
       }
-      if (filter === 'reachable') {
-        return v.reachability === 'Reachable';
+      if (filter === 'exploitable') {
+        return v.exploitability === 'Exploitable';
       }
       return false;
     });

@@ -86,11 +86,11 @@
           </svg>
           Fix High/Critical
         </button>
-        <button class="action-btn secondary" on:click={() => fixAll('reachable')}>
+        <button class="action-btn secondary" on:click={() => fixAll('exploitable')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2"/>
           </svg>
-          Fix Reachable
+          Fix Exploitable
         </button>
       </div>
     {:else}
@@ -174,32 +174,34 @@
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
   }
-
   .action-btn.primary:hover {
     background: var(--vscode-button-hoverBackground);
     transform: translateY(-1px);
   }
 
   .action-btn.warning {
-    background: rgba(255, 149, 0, 0.15);
-    color: #FF9500;
-    border: 1px solid rgba(255, 149, 0, 0.3);
+    background-color: rgba(255, 180, 50, 0.18);
+    border: 1px solid rgba(255, 180, 50, 0.35);
+    color: rgb(255, 200, 100);
   }
-
   .action-btn.warning:hover {
-    background: rgba(255, 149, 0, 0.25);
+    background-color: rgba(255, 180, 50, 0.28);
     transform: translateY(-1px);
   }
 
   .action-btn.secondary {
-    background: rgba(88, 86, 214, 0.15);
-    color: #5856D6;
-    border: 1px solid rgba(88, 86, 214, 0.3);
+    background-color: rgba(255, 90, 90, 0.18);
+    border: 1px solid rgba(255, 90, 90, 0.35);
+    color: rgb(255, 130, 130);
+  }
+  .action-btn.secondary:hover {
+    background-color: rgba(255, 90, 90, 0.28);
+    transform: translateY(-1px);
   }
 
-  .action-btn.secondary:hover {
-    background: rgba(88, 86, 214, 0.25);
-    transform: translateY(-1px);
+  .vscode-dark .action-btn.warning,
+  .vscode-dark .action-btn.secondary {
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.05);
   }
 
   .empty-state {

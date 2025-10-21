@@ -19,7 +19,7 @@
   let isLoading = false;
 
   onMount(() => {
-    console.log('🚀 App mounted!');
+    console.log('🚀 App mounted!'); //Debug
     console.log('Current view:', currentView);
     // Listen for messages from extension
     window.addEventListener('message', handleMessage);
@@ -31,11 +31,11 @@
 
   function handleMessage(event) {
     const message = event.data;
-    console.log('📩 Received message:', message); // Add this line
+    console.log('📩 Received message:', message); //Debug
 
     switch (message.type) {
       case 'loginSuccess':
-        console.log('✅ Login success, tokens:', message.tokens); // Add this
+        console.log('✅ Login success, tokens:', message.tokens); //Debug
         authStore.set(message.tokens);
         currentView = 'dashboard';
         isLoading = false;
