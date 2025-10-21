@@ -372,7 +372,7 @@ Manual testing checklist:
 
 ## Future Enhancements
 
-- [x] Session pesistence when reloading extension
+- [x] Session persistence when reloading extension
 - [x] Automatic token refresh
 - [ ] Scan history and comparison
 - [ ] Custom scan configurations

@@ -17,17 +17,40 @@ const users = {
   'admin': 'admin123'
 };
 
-// Mock tokens storage
+// Mock tokens storage - Map of token -> { username, type, createdAt }
 const tokens = new Map();
 
 // Helper function to generate mock token
-function generateToken(username) {
-  return `mock_token_${username}_${Date.now()}`;
+function generateToken(username, type = 'access') {
+  return `mock_${type}_${username}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Helper function to validate token
+function validateToken(token, expectedType = 'access') {
+  const tokenData = tokens.get(token);
+  if (!tokenData) {
+    return { valid: false, error: 'Invalid token' };
+  }
+  
+  if (tokenData.type !== expectedType) {
+    return { valid: false, error: 'Invalid token type' };
+  }
+
+  // Check if token is expired (access: 15 min, refresh: 7 days)
+  const expiryTime = tokenData.type === 'access' ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+  const tokenAge = Date.now() - tokenData.createdAt;
+  
+  if (tokenAge > expiryTime) {
+    tokens.delete(token);
+    return { valid: false, error: 'Token expired' };
+  }
+
+  return { valid: true, data: tokenData };
 }
 
 // 1. Login API
 app.post('/api/v1/login', (req, res) => {
-  console.log('📥 Login request:', req.body);
+  console.log('🔥 Login request:', req.body);
   
   const { username, password } = req.body;
 
@@ -40,20 +63,31 @@ app.post('/api/v1/login', (req, res) => {
   }
 
   if (users[username] && users[username] === password) {
-    const accessToken = generateToken(username);
-    const refreshToken = generateToken(`${username}_refresh`);
+    const accessToken = generateToken(username, 'access');
+    const refreshToken = generateToken(username, 'refresh');
     
-    // Store tokens
-    tokens.set(accessToken, { username, type: 'access' });
-    tokens.set(refreshToken, { username, type: 'refresh' });
+    // Store tokens with metadata
+    tokens.set(accessToken, { 
+      username, 
+      type: 'access',
+      createdAt: Date.now()
+    });
+    tokens.set(refreshToken, { 
+      username, 
+      type: 'refresh',
+      createdAt: Date.now()
+    });
 
     console.log('✅ Login successful for:', username);
+    console.log(`   Access token: ${accessToken.substring(0, 30)}...`);
+    console.log(`   Refresh token: ${refreshToken.substring(0, 30)}...`);
     
     return res.json({
       success: true,
       access: accessToken,
       refresh: refreshToken,
-      message: 'Login successful'
+      message: 'Login successful',
+      expiresIn: 900 // 15 minutes in seconds
     });
   } else {
     console.log('❌ Login failed for:', username);
@@ -64,9 +98,101 @@ app.post('/api/v1/login', (req, res) => {
   }
 });
 
-// 2. Security Testing API
+// 2. Refresh Token API
+app.post('/api/v1/refresh', (req, res) => {
+  console.log('🔄 Token refresh request received');
+  
+  const { refresh } = req.body;
+
+  if (!refresh) {
+    return res.status(400).json({
+      success: false,
+      message: 'Refresh token is required'
+    });
+  }
+
+  // Validate refresh token
+  const validation = validateToken(refresh, 'refresh');
+  
+  if (!validation.valid) {
+    console.log('❌ Refresh token validation failed:', validation.error);
+    return res.status(401).json({
+      success: false,
+      message: validation.error
+    });
+  }
+
+  const { username } = validation.data;
+
+  // Generate new access token
+  const newAccessToken = generateToken(username, 'access');
+  
+  // Store new access token
+  tokens.set(newAccessToken, { 
+    username, 
+    type: 'access',
+    createdAt: Date.now()
+  });
+
+  console.log('✅ Token refreshed for user:', username);
+  console.log(`   New access token: ${newAccessToken.substring(0, 30)}...`);
+
+  return res.json({
+    success: true,
+    access: newAccessToken,
+    message: 'Token refreshed successfully',
+    expiresIn: 900 // 15 minutes in seconds
+  });
+});
+
+// 3. Logout API
+app.post('/api/v1/logout', (req, res) => {
+  console.log('👋 Logout request received');
+  
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized - No token provided'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const tokenData = tokens.get(token);
+
+  if (!tokenData) {
+    // Token doesn't exist, but we'll still return success
+    console.log('⚠️ Logout with invalid/expired token');
+    return res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  }
+
+  const username = tokenData.username;
+
+  // Delete all tokens for this user
+  let deletedCount = 0;
+  for (const [key, value] of tokens.entries()) {
+    if (value.username === username) {
+      tokens.delete(key);
+      deletedCount++;
+    }
+  }
+
+  console.log(`✅ Logout successful for user: ${username}`);
+  console.log(`   Deleted ${deletedCount} token(s)`);
+
+  return res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
+});
+
+// 4. Security Testing API
 app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
-  console.log('📥 Security testing request received');
+  console.log('🔥 Security testing request received');
   
   const authHeader = req.headers.authorization;
   
@@ -79,22 +205,22 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const tokenData = tokens.get(token);
+  const validation = validateToken(token, 'access');
 
-  if (!tokenData) {
+  if (!validation.valid) {
     return res.status(401).json({
       success: false,
-      message: 'Unauthorized - Invalid token'
+      message: validation.error
     });
   }
 
   // Clean up uploaded file
   if (req.file) {
     fs.unlinkSync(req.file.path);
-    console.log('🗑️  Cleaned up uploaded file');
+    console.log('🗑️ Cleaned up uploaded file');
   }
 
-  console.log('✅ Security scan completed for user:', tokenData.username);
+  console.log('✅ Security scan completed for user:', validation.data.username);
 
   // Mock vulnerability data
   const mockVulnerabilities = [
@@ -104,7 +230,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "45-48",
       severity: "Critical",
       impact: "Allows unauthorized database access and data manipulation",
-      reachability: "Reachable",
+      exploitability: "Exploitable",
       description: "The application concatenates user input directly into SQL queries without proper sanitization, making it vulnerable to SQL injection attacks.",
       cve: "CVE-2023-12345",
       recommendation: "Use parameterized queries or prepared statements to prevent SQL injection. Never concatenate user input directly into SQL queries.",
@@ -117,7 +243,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "23-25",
       severity: "High",
       impact: "Attackers can inject malicious scripts into web pages viewed by users",
-      reachability: "Reachable",
+      exploitability: "Exploitable",
       description: "User input is rendered directly in HTML without proper encoding, allowing script injection.",
       cve: "CVE-2023-23456",
       recommendation: "Always sanitize and encode user input before rendering in HTML. Use a template engine with auto-escaping.",
@@ -130,7 +256,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "12-15",
       severity: "Critical",
       impact: "Exposes sensitive database credentials in source code",
-      reachability: "Not Reachable",
+      exploitability: "Not Exploitable",
       description: "Database credentials are hardcoded in the source code, which is a severe security risk.",
       cve: null,
       recommendation: "Store credentials in environment variables or use a secure secrets management system.",
@@ -143,7 +269,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "67-70",
       severity: "High",
       impact: "Allows attackers to access files outside the intended directory",
-      reachability: "Reachable",
+      exploitability: "Exploitable",
       description: "The application uses user input to construct file paths without proper validation.",
       cve: "CVE-2023-34567",
       recommendation: "Validate and sanitize file paths. Use path.join() and check that the resolved path is within allowed directories.",
@@ -156,7 +282,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "89-92",
       severity: "Medium",
       impact: "May lead to remote code execution or data tampering",
-      reachability: "Not Reachable",
+      exploitability: "Not Exploitable",
       description: "The application deserializes user-controlled data without validation.",
       cve: "CVE-2023-45678",
       recommendation: "Avoid deserializing untrusted data. If necessary, implement strict validation and use safe serialization formats like JSON.",
@@ -169,7 +295,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "15-18",
       severity: "High",
       impact: "Unauthorized access to administrative functions",
-      reachability: "Reachable",
+      exploitability: "Exploitable",
       description: "Admin routes are accessible without authentication checks.",
       cve: null,
       recommendation: "Implement authentication middleware for all sensitive routes.",
@@ -182,7 +308,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "34-37",
       severity: "Medium",
       impact: "Encrypted data may be compromised",
-      reachability: "Not Reachable",
+      exploitability: "Not Exploitable",
       description: "The application uses MD5 for password hashing, which is cryptographically broken.",
       cve: null,
       recommendation: "Use modern hashing algorithms like bcrypt, scrypt, or Argon2 for password storage.",
@@ -195,7 +321,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       lines: "12-16",
       severity: "Low",
       impact: "Reveals sensitive system information to attackers",
-      reachability: "Reachable",
+      exploitability: "Exploitable",
       description: "Error messages include stack traces and system information in production.",
       cve: null,
       recommendation: "Log detailed errors server-side but return generic error messages to clients in production.",
@@ -215,14 +341,14 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       high: mockVulnerabilities.filter(v => v.severity === 'High').length,
       medium: mockVulnerabilities.filter(v => v.severity === 'Medium').length,
       low: mockVulnerabilities.filter(v => v.severity === 'Low').length,
-      reachable: mockVulnerabilities.filter(v => v.reachability === 'Reachable').length
+      exploitable: mockVulnerabilities.filter(v => v.exploitability === 'Exploitable').length
     }
   });
 });
 
-// 3. Profile API
+// 5. Profile API
 app.get('/api/v1/profile', (req, res) => {
-  console.log('📥 Profile request received');
+  console.log('🔥 Profile request received');
   
   const authHeader = req.headers.authorization;
   
@@ -235,16 +361,16 @@ app.get('/api/v1/profile', (req, res) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const tokenData = tokens.get(token);
+  const validation = validateToken(token, 'access');
 
-  if (!tokenData) {
+  if (!validation.valid) {
     return res.status(401).json({
       success: false,
-      message: 'Unauthorized - Invalid token'
+      message: validation.error
     });
   }
 
-  console.log('✅ Profile fetched for user:', tokenData.username);
+  console.log('✅ Profile fetched for user:', validation.data.username);
 
   // Mock profile data
   const profiles = {
@@ -276,7 +402,7 @@ app.get('/api/v1/profile', (req, res) => {
     }
   };
 
-  const profile = profiles[tokenData.username] || profiles['demo'];
+  const profile = profiles[validation.data.username] || profiles['demo'];
   
   res.json({
     success: true,
@@ -289,7 +415,8 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    activeTokens: tokens.size
   });
 });
 
@@ -300,6 +427,8 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       login: 'POST /api/v1/login',
+      refresh: 'POST /api/v1/refresh',
+      logout: 'POST /api/v1/logout',
       securityTest: 'POST /api/v1/security-testing/',
       profile: 'GET /api/v1/profile',
       health: 'GET /health'
@@ -307,6 +436,10 @@ app.get('/', (req, res) => {
     testCredentials: {
       user1: { username: 'demo', password: 'password123' },
       user2: { username: 'admin', password: 'admin123' }
+    },
+    tokenInfo: {
+      accessTokenExpiry: '15 minutes',
+      refreshTokenExpiry: '7 days'
     }
   });
 });
@@ -331,6 +464,8 @@ app.listen(PORT, () => {
   console.log('');
   console.log('📋 Available Endpoints:');
   console.log('  POST   /api/v1/login');
+  console.log('  POST   /api/v1/refresh');
+  console.log('  POST   /api/v1/logout');
   console.log('  POST   /api/v1/security-testing/');
   console.log('  GET    /api/v1/profile');
   console.log('  GET    /health');
@@ -338,6 +473,10 @@ app.listen(PORT, () => {
   console.log('🔐 Test Credentials:');
   console.log('  Username: demo     Password: password123');
   console.log('  Username: admin    Password: admin123');
+  console.log('');
+  console.log('⏱️  Token Expiry:');
+  console.log('  Access Token:  15 minutes');
+  console.log('  Refresh Token: 7 days');
   console.log('');
   console.log('💡 Tip: Visit http://localhost:3007 for API info');
   console.log('================================');
