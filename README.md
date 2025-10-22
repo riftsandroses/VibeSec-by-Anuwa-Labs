@@ -358,13 +358,14 @@ Manual testing checklist:
 - [x] Results table displays properly
 - [x] Vulnerability fixes apply correctly
 - [x] Profile loads user data
-- [ ] All navigation works
-- [ ] UI is responsive in portrait mode
+- [x] All navigation works
+- [x] UI is responsive in portrait mode
 - [x] Dark/light themes both work
-- [ ] Error handling displays appropriately
+- [x] Error handling displays appropriately
 
 ## Known Limitations
 
+- Code replacement does not work reliably
 - Extension requires active internet connection
 - Workspace must be a folder (not individual files)
 - Large workspaces may take time to zip
