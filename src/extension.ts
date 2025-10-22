@@ -5,9 +5,20 @@ import archiver from 'archiver';
 
 const TOKEN_ACCESS_KEY = 'vibesec.token.access';
 const TOKEN_REFRESH_KEY = 'vibesec.token.refresh';
+const NOTIFICATION_PREFS_KEY = 'vibesec.notifications';
+
+interface NotificationPreferences {
+  login: boolean;
+  logout: boolean;
+  securityTest: boolean;
+  fixVulnerability: boolean;
+  fixAll: boolean;
+  dashboard: boolean;
+  profile: boolean;
+}
 
 export function activate(context: vscode.ExtensionContext) {
-  const provider = new VibeSecViewProvider(context.extensionUri, context.secrets);
+  const provider = new VibeSecViewProvider(context.extensionUri, context.secrets, context.globalState);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -39,8 +50,33 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private readonly _secrets: vscode.SecretStorage
+    private readonly _secrets: vscode.SecretStorage,
+    private readonly _globalState: vscode.Memento
   ) {}
+
+  private async getNotificationPreferences(): Promise<NotificationPreferences> {
+    const prefs = this._globalState.get<NotificationPreferences>(NOTIFICATION_PREFS_KEY);
+    return prefs || {
+      login: true,
+      logout: true,
+      securityTest: true,
+      fixVulnerability: true,
+      fixAll: true,
+      dashboard: true,
+      profile: true
+    };
+  }
+
+  private async showNotification(type: keyof NotificationPreferences, message: string, isError: boolean = false) {
+    const prefs = await this.getNotificationPreferences();
+    if (prefs[type]) {
+      if (isError) {
+        vscode.window.showErrorMessage(message);
+      } else {
+        vscode.window.showInformationMessage(message);
+      }
+    }
+  }
 
   public async resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -76,6 +112,12 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         case 'getProfile':
           await this.handleGetProfile(data.tokens);
           break;
+        case 'getNotificationPreferences':
+          await this.handleGetNotificationPreferences();
+          break;
+        case 'updateNotificationPreferences':
+          await this.handleUpdateNotificationPreferences(data.preferences);
+          break;
         case 'showAlert':
           vscode.window.showInformationMessage(data.message);
           break;
@@ -91,6 +133,23 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     setTimeout(() => {
       this.checkExistingSession();
     }, 100);
+  }
+
+  private async handleGetNotificationPreferences() {
+    const prefs = await this.getNotificationPreferences();
+    this._view?.webview.postMessage({
+      type: 'notificationPreferencesLoaded',
+      preferences: prefs
+    });
+  }
+
+  private async handleUpdateNotificationPreferences(preferences: NotificationPreferences) {
+    await this._globalState.update(NOTIFICATION_PREFS_KEY, preferences);
+    vscode.window.showInformationMessage('✅ Notification preferences updated successfully');
+    this._view?.webview.postMessage({
+      type: 'notificationPreferencesUpdated',
+      preferences
+    });
   }
 
   private async checkExistingSession() {
@@ -259,12 +318,14 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       }
       
       await this.clearTokens();
+      await this.showNotification('logout', '✅ Successfully logged out');
       this._view?.webview.postMessage({
         type: 'logoutSuccess'
       });
     } catch (error) {
       console.error('Logout error:', error);
       await this.clearTokens();
+      await this.showNotification('logout', '✅ Successfully logged out');
       this._view?.webview.postMessage({
         type: 'logoutSuccess'
       });
@@ -273,6 +334,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleLogin(credentials: { username: string; password: string }) {
     try {
+      await this.showNotification('login', '🔐 Logging in...');
       const axios = require('axios');
       
       const response = await axios.post('http://localhost:3007/api/v1/login', credentials, {
@@ -285,6 +347,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
       if (data.success && data.access) {
         await this.saveTokens(data.access, data.refresh);
+        await this.showNotification('login', '✅ Login successful! Welcome back.');
 
         this._view?.webview.postMessage({
           type: 'loginSuccess',
@@ -294,21 +357,25 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
           }
         });
       } else {
+        await this.showNotification('login', '❌ Login failed: ' + (data.message || 'Unknown error'), true);
         this._view?.webview.postMessage({
           type: 'loginError',
           error: data.message || 'Login failed'
         });
       }
     } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || 'Network error occurred';
+      await this.showNotification('login', '❌ Login failed: ' + errorMsg, true);
       this._view?.webview.postMessage({
         type: 'loginError',
-        error: error.response?.data?.message || error.message || 'Network error occurred'
+        error: errorMsg
       });
     }
   }
 
   private async handleGetDashboard(tokens: { access: string; refresh: string }) {
     try {
+      await this.showNotification('dashboard', '📊 Loading dashboard...');
       const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
         const axios = require('axios');
         const response = await axios.get('http://localhost:3007/api/v1/dashboard', {
@@ -320,17 +387,20 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       });
 
       if (data.success) {
+        await this.showNotification('dashboard', '✅ Dashboard loaded successfully');
         this._view?.webview.postMessage({
           type: 'dashboardSuccess',
           dashboard: data
         });
       } else {
+        await this.showNotification('dashboard', '❌ Failed to load dashboard', true);
         this._view?.webview.postMessage({
           type: 'dashboardError',
           error: data.message || 'Failed to fetch dashboard'
         });
       }
     } catch (error: any) {
+      await this.showNotification('dashboard', '❌ Failed to load dashboard', true);
       this._view?.webview.postMessage({
         type: 'dashboardError',
         error: error.message || 'Network error occurred'
@@ -340,9 +410,11 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleSecurityTest(tokens: { access: string; refresh: string }) {
     try {
+      await this.showNotification('securityTest', '🔍 Starting security test...');
       const workspaceFolders = vscode.workspace.workspaceFolders;
       
       if (!workspaceFolders || workspaceFolders.length === 0) {
+        await this.showNotification('securityTest', '❌ No workspace folder open', true);
         this._view?.webview.postMessage({
           type: 'securityTestError',
           error: 'No workspace folder open'
@@ -353,46 +425,56 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const workspacePath = workspaceFolders[0].uri.fsPath;
       const zipPath = path.join(workspacePath, '.vibesec-temp.zip');
 
-      // Create zip file of workspace
-      await this.createZipFile(workspacePath, zipPath);
-      
-      // Read the zip file
-      const zipBuffer = fs.readFileSync(zipPath);
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "VibeSec Security Scan",
+        cancellable: false
+      }, async (progress) => {
+        progress.report({ message: "Preparing workspace..." });
+        await this.createZipFile(workspacePath, zipPath);
+        
+        progress.report({ message: "Uploading to server..." });
+        const zipBuffer = fs.readFileSync(zipPath);
 
-      const FormData = require('form-data');
-      const formData = new FormData();
-      formData.append('file', zipBuffer, 'workspace.zip');
+        const FormData = require('form-data');
+        const formData = new FormData();
+        formData.append('file', zipBuffer, 'workspace.zip');
 
-      const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
-        const axios = require('axios');
-        const response = await axios.post('http://localhost:3007/api/v1/security-testing/', formData, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            ...formData.getHeaders()
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity
+        progress.report({ message: "Analyzing code..." });
+        const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
+          const axios = require('axios');
+          const response = await axios.post('http://localhost:3007/api/v1/security-testing/', formData, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              ...formData.getHeaders()
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          });
+          return response.data;
         });
-        return response.data;
+
+        // Clean up temp file
+        if (fs.existsSync(zipPath)) {
+          fs.unlinkSync(zipPath);
+          console.log('Cleaned up temporary zip file');
+        }
+
+        if (data.success && data.vulnerabilities) {
+          const vulnCount = data.vulnerabilities.length;
+          await this.showNotification('securityTest', `✅ Security scan complete! Found ${vulnCount} vulnerability${vulnCount !== 1 ? 'ies' : 'y'}.`);
+          this._view?.webview.postMessage({
+            type: 'securityTestSuccess',
+            results: data
+          });
+        } else {
+          await this.showNotification('securityTest', '❌ Security test failed', true);
+          this._view?.webview.postMessage({
+            type: 'securityTestError',
+            error: data.message || 'Security test failed'
+          });
+        }
       });
-
-      // Clean up temp file
-      if (fs.existsSync(zipPath)) {
-        fs.unlinkSync(zipPath);
-        console.log('Cleaned up temporary zip file');
-      }
-
-      if (data.success && data.vulnerabilities) {
-        this._view?.webview.postMessage({
-          type: 'securityTestSuccess',
-          results: data
-        });
-      } else {
-        this._view?.webview.postMessage({
-          type: 'securityTestError',
-          error: data.message || 'Security test failed'
-        });
-      }
     } catch (error: any) {
       // Clean up temp file on error
       try {
@@ -407,6 +489,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         console.error('Error cleaning up temp file:', cleanupError);
       }
 
+      await this.showNotification('securityTest', '❌ Security test failed: ' + error.message, true);
       this._view?.webview.postMessage({
         type: 'securityTestError',
         error: error.message || 'Unknown error occurred'
@@ -446,8 +529,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
       archive.pipe(output);
 
-      // Add all files and folders from workspace
-      // Exclude common directories that shouldn't be scanned
       const excludePatterns = [
         'node_modules/**',
         '.git/**',
@@ -462,7 +543,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       archive.glob('**/*', {
         cwd: sourcePath,
         ignore: excludePatterns,
-        dot: true // Include hidden files
+        dot: true
       });
 
       archive.finalize();
@@ -471,6 +552,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleFixVulnerability(vulnerability: any) {
     try {
+      await this.showNotification('fixVulnerability', `🔧 Fixing vulnerability in ${vulnerability.file}...`);
       const filePath = path.join(
         vscode.workspace.workspaceFolders![0].uri.fsPath,
         vulnerability.file
@@ -493,11 +575,13 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       await vscode.workspace.applyEdit(edit);
       await document.save();
 
+      await this.showNotification('fixVulnerability', `✅ Fix applied successfully to ${vulnerability.file}`);
       this._view?.webview.postMessage({
         type: 'fixSuccess',
         file: vulnerability.file
       });
     } catch (error) {
+      await this.showNotification('fixVulnerability', '❌ Failed to apply fix', true);
       this._view?.webview.postMessage({
         type: 'fixError',
         error: error instanceof Error ? error.message : 'Failed to apply fix'
@@ -517,18 +601,28 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       return false;
     });
 
+    await this.showNotification('fixAll', `🔧 Applying ${filtered.length} fixes...`);
+
+    let successCount = 0;
     for (const vuln of filtered) {
-      await this.handleFixVulnerability(vuln);
+      try {
+        await this.handleFixVulnerability(vuln);
+        successCount++;
+      } catch (error) {
+        console.error('Error fixing vulnerability:', error);
+      }
     }
 
+    await this.showNotification('fixAll', `✅ Applied ${successCount} of ${filtered.length} fixes successfully`);
     this._view?.webview.postMessage({
       type: 'fixAllSuccess',
-      count: filtered.length
+      count: successCount
     });
   }
 
   private async handleGetProfile(tokens: { access: string; refresh: string }) {
     try {
+      await this.showNotification('profile', '👤 Loading profile...');
       const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
         const axios = require('axios');
         const response = await axios.get('http://localhost:3007/api/v1/profile', {
@@ -540,17 +634,20 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       });
 
       if (data.success) {
+        await this.showNotification('profile', '✅ Profile loaded successfully');
         this._view?.webview.postMessage({
           type: 'profileSuccess',
           profile: data
         });
       } else {
+        await this.showNotification('profile', '❌ Failed to load profile', true);
         this._view?.webview.postMessage({
           type: 'profileError',
           error: data.message || 'Failed to fetch profile'
         });
       }
     } catch (error: any) {
+      await this.showNotification('profile', '❌ Failed to load profile', true);
       this._view?.webview.postMessage({
         type: 'profileError',
         error: error.message || 'Network error occurred'

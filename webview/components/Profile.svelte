@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { profileStore } from '../stores';
   import Header from './Header.svelte';
   import vscode from '../vscode.js';
@@ -7,7 +7,36 @@
   const dispatch = createEventDispatcher();
 
   let profile;
+  let notificationPreferences = {
+    login: true,
+    logout: true,
+    securityTest: true,
+    fixVulnerability: true,
+    fixAll: true,
+    dashboard: true,
+    profile: true
+  };
+  let showNotificationSettings = false;
+  
   profileStore.subscribe(value => profile = value);
+
+  onMount(() => {
+    // Request notification preferences from extension
+    vscode.postMessage({ type: 'getNotificationPreferences' });
+    
+    // Listen for preferences response
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  });
+
+  function handleMessage(event) {
+    const message = event.data;
+    if (message.type === 'notificationPreferencesLoaded') {
+      notificationPreferences = message.preferences;
+    } else if (message.type === 'notificationPreferencesUpdated') {
+      notificationPreferences = message.preferences;
+    }
+  }
 
   function navigateToDashboard() {
     dispatch('navigate', 'dashboard');
@@ -22,6 +51,28 @@
     if (!status) return 'unknown';
     return status.toLowerCase();
   }
+
+  function toggleNotificationSettings() {
+    showNotificationSettings = !showNotificationSettings;
+  }
+
+  function updateNotificationPreference(key) {
+    notificationPreferences[key] = !notificationPreferences[key];
+    vscode.postMessage({ 
+      type: 'updateNotificationPreferences', 
+      preferences: notificationPreferences 
+    });
+  }
+
+  const notificationLabels = {
+    login: { title: 'Login', description: 'Notifications when logging in' },
+    logout: { title: 'Logout', description: 'Notifications when logging out' },
+    securityTest: { title: 'Security Test', description: 'Notifications during security scans' },
+    fixVulnerability: { title: 'Fix Vulnerability', description: 'Notifications when fixing individual vulnerabilities' },
+    fixAll: { title: 'Fix All', description: 'Notifications when applying bulk fixes' },
+    dashboard: { title: 'Dashboard', description: 'Notifications when loading dashboard' },
+    profile: { title: 'Profile', description: 'Notifications when loading profile' }
+  };
 </script>
 
 <div class="profile-page">
@@ -145,13 +196,7 @@
           <h3>Settings</h3>
         </div>
         <div class="settings-list">
-          <button class="setting-item">
-            <span>API Configuration</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button class="setting-item">
+          <button class="setting-item" on:click={toggleNotificationSettings}>
             <span>Notification Preferences</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -165,6 +210,40 @@
           </button>
         </div>
       </div>
+
+      {#if showNotificationSettings}
+        <div class="notification-settings-modal" on:click={toggleNotificationSettings}>
+          <div class="modal-content" on:click|stopPropagation>
+            <div class="modal-header">
+              <h3>Notification Preferences</h3>
+              <button class="close-btn" on:click={toggleNotificationSettings}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p class="modal-description">Choose which actions should show VS Code notifications</p>
+              {#each Object.entries(notificationLabels) as [key, label]}
+                <div class="notification-item">
+                  <div class="notification-info">
+                    <div class="notification-title">{label.title}</div>
+                    <div class="notification-desc">{label.description}</div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      checked={notificationPreferences[key]}
+                      on:change={() => updateNotificationPreference(key)}
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
 
       <button class="logout-btn" on:click={handleLogout}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -424,6 +503,151 @@
 
   .setting-item:hover {
     background: var(--vscode-list-hoverBackground);
+  }
+
+  .notification-settings-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .modal-content {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 12px;
+    max-width: 500px;
+    width: 100%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+
+  .modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--vscode-editor-foreground);
+  }
+
+  .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+  }
+
+  .close-btn:hover {
+    background: var(--vscode-list-hoverBackground);
+  }
+
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  .modal-description {
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 20px;
+  }
+
+  .notification-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+
+  .notification-item:last-child {
+    border-bottom: none;
+  }
+
+  .notification-info {
+    flex: 1;
+  }
+
+  .notification-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--vscode-editor-foreground);
+    margin-bottom: 4px;
+  }
+
+  .notification-desc {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-panel-border);
+    transition: 0.3s;
+    border-radius: 24px;
+  }
+
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--vscode-editor-foreground);
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+
+  input:checked + .toggle-slider {
+    background-color: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+  }
+
+  input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+    background-color: white;
   }
 
   .logout-btn {
