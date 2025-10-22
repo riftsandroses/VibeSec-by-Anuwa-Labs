@@ -228,7 +228,7 @@ app.get('/api/v1/dashboard', (req, res) => {
   const dashboardData = {
     'demo': {
       totalScans: 12,
-      criticalIssues: 3,
+      criticalIssues: "NA",
       highIssues: 8,
       mediumIssues: 15,
       lowIssues: 22,
