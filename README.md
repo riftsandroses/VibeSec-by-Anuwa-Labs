@@ -376,6 +376,9 @@ Manual testing checklist:
 
 - [x] Session persistence when reloading extension
 - [x] Automatic token refresh
+- [ ] Fix spelling errors wherever they exist
+- [ ] Add 'Exploitable' tag to SecurityResults.svelte/VulnerabilityTable.svelte file
+- [ ] Provide CVSS Score parameter in SecurityResults.svelte/VulnerabilityTable.svelte file
 - [ ] Clarification of format of exploitability (integer, string, etc.)
 - [ ] Replace logos with updated ones for better designs
 - [ ] Need to package into a VSIX file format
