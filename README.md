@@ -353,9 +353,9 @@ npm test
 
 Manual testing checklist:
 - [x] Login flow works correctly
-- [ ] Dashboard displays data
-- [ ] Security scan creates and uploads zip
-- [ ] Results table displays properly
+- [x] Dashboard displays data
+- [x] Security scan creates and uploads zip
+- [x] Results table displays properly
 - [ ] Vulnerability fixes apply correctly
 - [ ] Profile loads user data
 - [ ] All navigation works
