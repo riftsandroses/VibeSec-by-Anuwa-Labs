@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
       provider,
       {
         webviewOptions: {
-          retainContextWhenHidden: true // This prevents the webview from being destroyed
+          retainContextWhenHidden: true
         }
       }
     )
@@ -56,7 +56,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-    // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(async (data) => {
       switch (data.type) {
         case 'login':
@@ -64,6 +63,9 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'startSecurityTest':
           await this.handleSecurityTest(data.tokens);
+          break;
+        case 'getDashboard':
+          await this.handleGetDashboard(data.tokens);
           break;
         case 'fixVulnerability':
           await this.handleFixVulnerability(data.vulnerability);
@@ -86,8 +88,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Check for existing session after webview is ready
-    // Small delay to ensure webview is fully initialized
     setTimeout(() => {
       this.checkExistingSession();
     }, 100);
@@ -101,12 +101,10 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       if (accessToken && refreshToken) {
         console.log('Found existing tokens, validating...');
         
-        // Try to use the token
         const tokens = { access: accessToken, refresh: refreshToken };
         const isValid = await this.validateAndRefreshToken(tokens);
 
         if (isValid) {
-          // Get updated tokens (in case they were refreshed)
           const updatedAccess = await this._secrets.get(TOKEN_ACCESS_KEY);
           const updatedRefresh = await this._secrets.get(TOKEN_REFRESH_KEY);
           
@@ -144,7 +142,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     try {
       const axios = require('axios');
       
-      // Try to use the access token
       try {
         const response = await axios.get('http://localhost:3007/api/v1/profile', {
           headers: {
@@ -157,7 +154,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
           return true;
         }
       } catch (error: any) {
-        // If 401, try to refresh the token
         if (error.response?.status === 401) {
           console.log('Access token expired, attempting refresh...');
           return await this.refreshAccessToken(tokens.refresh);
@@ -189,10 +185,8 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
       if (data.success && data.access) {
         console.log('Token refreshed successfully');
-        // Save new access token (refresh token stays the same)
         await this._secrets.store(TOKEN_ACCESS_KEY, data.access);
         
-        // If a new refresh token is provided, save it too
         if (data.refresh) {
           await this._secrets.store(TOKEN_REFRESH_KEY, data.refresh);
         }
@@ -212,22 +206,18 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     requestFn: (accessToken: string) => Promise<any>
   ): Promise<any> {
     try {
-      // Try with current access token
       return await requestFn(tokens.access);
     } catch (error: any) {
-      // If 401, try to refresh and retry
       if (error.response?.status === 401) {
         const refreshed = await this.refreshAccessToken(tokens.refresh);
         
         if (refreshed) {
-          // Get new access token and retry
           const newAccessToken = await this._secrets.get(TOKEN_ACCESS_KEY);
           if (newAccessToken) {
             return await requestFn(newAccessToken);
           }
         }
         
-        // Refresh failed, session expired
         await this.clearTokens();
         this._view?.webview.postMessage({
           type: 'sessionExpired'
@@ -255,7 +245,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const accessToken = await this._secrets.get(TOKEN_ACCESS_KEY);
       
       if (accessToken) {
-        // Call backend logout endpoint
         try {
           const axios = require('axios');
           await axios.post('http://localhost:3007/api/v1/logout', {}, {
@@ -266,7 +255,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
           console.log('Backend logout successful');
         } catch (error) {
           console.error('Backend logout error:', error);
-          // Continue with local logout even if backend fails
         }
       }
       
@@ -276,7 +264,6 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       });
     } catch (error) {
       console.error('Logout error:', error);
-      // Clear tokens anyway
       await this.clearTokens();
       this._view?.webview.postMessage({
         type: 'logoutSuccess'
@@ -320,6 +307,37 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async handleGetDashboard(tokens: { access: string; refresh: string }) {
+    try {
+      const data = await this.makeAuthenticatedRequest(tokens, async (accessToken) => {
+        const axios = require('axios');
+        const response = await axios.get('http://localhost:3007/api/v1/dashboard', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        return response.data;
+      });
+
+      if (data.success) {
+        this._view?.webview.postMessage({
+          type: 'dashboardSuccess',
+          dashboard: data
+        });
+      } else {
+        this._view?.webview.postMessage({
+          type: 'dashboardError',
+          error: data.message || 'Failed to fetch dashboard'
+        });
+      }
+    } catch (error: any) {
+      this._view?.webview.postMessage({
+        type: 'dashboardError',
+        error: error.message || 'Network error occurred'
+      });
+    }
+  }
+
   private async handleSecurityTest(tokens: { access: string; refresh: string }) {
     try {
       const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -335,7 +353,10 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       const workspacePath = workspaceFolders[0].uri.fsPath;
       const zipPath = path.join(workspacePath, '.vibesec-temp.zip');
 
+      // Create zip file of workspace
       await this.createZipFile(workspacePath, zipPath);
+      
+      // Read the zip file
       const zipBuffer = fs.readFileSync(zipPath);
 
       const FormData = require('form-data');
@@ -348,7 +369,9 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             ...formData.getHeaders()
-          }
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
         });
         return response.data;
       });
@@ -356,6 +379,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
       // Clean up temp file
       if (fs.existsSync(zipPath)) {
         fs.unlinkSync(zipPath);
+        console.log('Cleaned up temporary zip file');
       }
 
       if (data.success && data.vulnerabilities) {
@@ -370,6 +394,19 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         });
       }
     } catch (error: any) {
+      // Clean up temp file on error
+      try {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          const zipPath = path.join(workspaceFolders[0].uri.fsPath, '.vibesec-temp.zip');
+          if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+          }
+        }
+      } catch (cleanupError) {
+        console.error('Error cleaning up temp file:', cleanupError);
+      }
+
       this._view?.webview.postMessage({
         type: 'securityTestError',
         error: error.message || 'Unknown error occurred'
@@ -380,13 +417,54 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
   private async createZipFile(sourcePath: string, outPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const output = fs.createWriteStream(outPath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
+      const archive = archiver('zip', { 
+        zlib: { level: 9 }
+      });
 
-      output.on('close', () => resolve());
-      archive.on('error', (err) => reject(err));
+      output.on('close', () => {
+        console.log(`Workspace zipped: ${archive.pointer()} total bytes`);
+        resolve();
+      });
+      
+      output.on('error', (err) => {
+        console.error('Output stream error:', err);
+        reject(err);
+      });
+
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        reject(err);
+      });
+
+      archive.on('warning', (err) => {
+        if (err.code === 'ENOENT') {
+          console.warn('Archive warning:', err);
+        } else {
+          reject(err);
+        }
+      });
 
       archive.pipe(output);
-      archive.directory(sourcePath, false);
+
+      // Add all files and folders from workspace
+      // Exclude common directories that shouldn't be scanned
+      const excludePatterns = [
+        'node_modules/**',
+        '.git/**',
+        '.vibesec-temp.zip',
+        '**/*.zip',
+        'dist/**',
+        'build/**',
+        '.vscode/**',
+        '**/.DS_Store'
+      ];
+
+      archive.glob('**/*', {
+        cwd: sourcePath,
+        ignore: excludePatterns,
+        dot: true // Include hidden files
+      });
+
       archive.finalize();
     });
   }

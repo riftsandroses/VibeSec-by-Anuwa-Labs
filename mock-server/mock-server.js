@@ -5,7 +5,28 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory');
+}
+
+// Configure multer to keep original filename
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const timestamp = Date.now();
+    const username = req.username || 'unknown';
+    const filename = `workspace_${username}_${timestamp}.zip`;
+    cb(null, filename);
+  }
+});
+
+const upload = multer({ storage: storage });
 
 // Middleware
 app.use(cors());
@@ -17,7 +38,7 @@ const users = {
   'admin': 'admin123'
 };
 
-// Mock tokens storage - Map of token -> { username, type, createdAt }
+// Mock tokens storage
 const tokens = new Map();
 
 // Helper function to generate mock token
@@ -36,7 +57,6 @@ function validateToken(token, expectedType = 'access') {
     return { valid: false, error: 'Invalid token type' };
   }
 
-  // Check if token is expired (access: 15 min, refresh: 7 days)
   const expiryTime = tokenData.type === 'access' ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
   const tokenAge = Date.now() - tokenData.createdAt;
   
@@ -54,7 +74,6 @@ app.post('/api/v1/login', (req, res) => {
   
   const { username, password } = req.body;
 
-  // Validate credentials
   if (!username || !password) {
     return res.status(400).json({
       success: false,
@@ -66,7 +85,6 @@ app.post('/api/v1/login', (req, res) => {
     const accessToken = generateToken(username, 'access');
     const refreshToken = generateToken(username, 'refresh');
     
-    // Store tokens with metadata
     tokens.set(accessToken, { 
       username, 
       type: 'access',
@@ -79,15 +97,13 @@ app.post('/api/v1/login', (req, res) => {
     });
 
     console.log('✅ Login successful for:', username);
-    console.log(`   Access token: ${accessToken.substring(0, 30)}...`);
-    console.log(`   Refresh token: ${refreshToken.substring(0, 30)}...`);
     
     return res.json({
       success: true,
       access: accessToken,
       refresh: refreshToken,
       message: 'Login successful',
-      expiresIn: 900 // 15 minutes in seconds
+      expiresIn: 900
     });
   } else {
     console.log('❌ Login failed for:', username);
@@ -111,7 +127,6 @@ app.post('/api/v1/refresh', (req, res) => {
     });
   }
 
-  // Validate refresh token
   const validation = validateToken(refresh, 'refresh');
   
   if (!validation.valid) {
@@ -123,11 +138,8 @@ app.post('/api/v1/refresh', (req, res) => {
   }
 
   const { username } = validation.data;
-
-  // Generate new access token
   const newAccessToken = generateToken(username, 'access');
   
-  // Store new access token
   tokens.set(newAccessToken, { 
     username, 
     type: 'access',
@@ -135,13 +147,12 @@ app.post('/api/v1/refresh', (req, res) => {
   });
 
   console.log('✅ Token refreshed for user:', username);
-  console.log(`   New access token: ${newAccessToken.substring(0, 30)}...`);
 
   return res.json({
     success: true,
     access: newAccessToken,
     message: 'Token refreshed successfully',
-    expiresIn: 900 // 15 minutes in seconds
+    expiresIn: 900
   });
 });
 
@@ -162,7 +173,6 @@ app.post('/api/v1/logout', (req, res) => {
   const tokenData = tokens.get(token);
 
   if (!tokenData) {
-    // Token doesn't exist, but we'll still return success
     console.log('⚠️ Logout with invalid/expired token');
     return res.json({
       success: true,
@@ -172,7 +182,6 @@ app.post('/api/v1/logout', (req, res) => {
 
   const username = tokenData.username;
 
-  // Delete all tokens for this user
   let deletedCount = 0;
   for (const [key, value] of tokens.entries()) {
     if (value.username === username) {
@@ -190,13 +199,12 @@ app.post('/api/v1/logout', (req, res) => {
   });
 });
 
-// 4. Security Testing API
-app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
-  console.log('🔥 Security testing request received');
+// 4. Dashboard API (NEW)
+app.get('/api/v1/dashboard', (req, res) => {
+  console.log('📊 Dashboard request received');
   
   const authHeader = req.headers.authorization;
   
-  // Validate token
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
@@ -214,13 +222,85 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
     });
   }
 
-  // Clean up uploaded file
-  if (req.file) {
-    fs.unlinkSync(req.file.path);
-    console.log('🗑️ Cleaned up uploaded file');
+  console.log('✅ Dashboard data fetched for user:', validation.data.username);
+
+  // Mock dashboard data based on user
+  const dashboardData = {
+    'demo': {
+      totalScans: 12,
+      criticalIssues: 3,
+      highIssues: 8,
+      mediumIssues: 15,
+      lowIssues: 22,
+      lastScanDate: '2025-10-18',
+      exploitableVulnerabilities: 5,
+      recentScans: [
+        { date: '2025-10-18', vulnerabilities: 48, duration: '2m 34s' },
+        { date: '2025-10-15', vulnerabilities: 52, duration: '2m 41s' },
+        { date: '2025-10-12', vulnerabilities: 45, duration: '2m 28s' }
+      ]
+    },
+    'admin': {
+      totalScans: 28,
+      criticalIssues: 5,
+      highIssues: 4,
+      mediumIssues: 9,
+      lowIssues: 14,
+      lastScanDate: '2025-10-21',
+      exploitableVulnerabilities: 2,
+      recentScans: [
+        { date: '2025-10-21', vulnerabilities: 28, duration: '3m 12s' },
+        { date: '2025-10-19', vulnerabilities: 30, duration: '3m 05s' },
+        { date: '2025-10-17', vulnerabilities: 32, duration: '3m 18s' }
+      ]
+    }
+  };
+
+  const userDashboard = dashboardData[validation.data.username] || dashboardData['demo'];
+
+  res.json({
+    success: true,
+    ...userDashboard
+  });
+});
+
+// 5. Security Testing API (MODIFIED)
+app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
+  console.log('🔥 Security testing request received');
+  
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized - No token provided'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const validation = validateToken(token, 'access');
+
+  if (!validation.valid) {
+    return res.status(401).json({
+      success: false,
+      message: validation.error
+    });
+  }
+
+  // Store username for multer filename
+  req.username = validation.data.username;
+
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No file uploaded'
+    });
   }
 
   console.log('✅ Security scan completed for user:', validation.data.username);
+  console.log('📦 Zip file saved:', req.file.filename);
+  console.log('📁 File path:', req.file.path);
+  console.log('💾 File size:', (req.file.size / 1024).toFixed(2), 'KB');
 
   // Mock vulnerability data
   const mockVulnerabilities = [
@@ -330,12 +410,13 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
     }
   ];
 
-  // Return mock results
   res.json({
     success: true,
     scanDate: new Date().toISOString(),
     totalVulnerabilities: mockVulnerabilities.length,
     vulnerabilities: mockVulnerabilities,
+    uploadedFile: req.file.filename,
+    fileSize: req.file.size,
     summary: {
       critical: mockVulnerabilities.filter(v => v.severity === 'Critical').length,
       high: mockVulnerabilities.filter(v => v.severity === 'High').length,
@@ -346,13 +427,12 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
   });
 });
 
-// 5. Profile API
+// 6. Profile API
 app.get('/api/v1/profile', (req, res) => {
   console.log('🔥 Profile request received');
   
   const authHeader = req.headers.authorization;
   
-  // Validate token
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
@@ -372,7 +452,6 @@ app.get('/api/v1/profile', (req, res) => {
 
   console.log('✅ Profile fetched for user:', validation.data.username);
 
-  // Mock profile data
   const profiles = {
     'demo': {
       name: 'Demo User',
@@ -429,6 +508,7 @@ app.get('/', (req, res) => {
       login: 'POST /api/v1/login',
       refresh: 'POST /api/v1/refresh',
       logout: 'POST /api/v1/logout',
+      dashboard: 'GET /api/v1/dashboard',
       securityTest: 'POST /api/v1/security-testing/',
       profile: 'GET /api/v1/profile',
       health: 'GET /health'
@@ -466,6 +546,7 @@ app.listen(PORT, () => {
   console.log('  POST   /api/v1/login');
   console.log('  POST   /api/v1/refresh');
   console.log('  POST   /api/v1/logout');
+  console.log('  GET    /api/v1/dashboard');
   console.log('  POST   /api/v1/security-testing/');
   console.log('  GET    /api/v1/profile');
   console.log('  GET    /health');
@@ -477,6 +558,8 @@ app.listen(PORT, () => {
   console.log('⏱️  Token Expiry:');
   console.log('  Access Token:  15 minutes');
   console.log('  Refresh Token: 7 days');
+  console.log('');
+  console.log('📁 Uploads Directory:', uploadsDir);
   console.log('');
   console.log('💡 Tip: Visit http://localhost:3007 for API info');
   console.log('================================');
