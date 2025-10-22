@@ -356,8 +356,8 @@ Manual testing checklist:
 - [x] Dashboard displays data
 - [x] Security scan creates and uploads zip
 - [x] Results table displays properly
-- [ ] Vulnerability fixes apply correctly
-- [ ] Profile loads user data
+- [x] Vulnerability fixes apply correctly
+- [x] Profile loads user data
 - [ ] All navigation works
 - [ ] UI is responsive in portrait mode
 - [x] Dark/light themes both work
