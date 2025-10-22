@@ -376,6 +376,10 @@ Manual testing checklist:
 
 - [x] Session persistence when reloading extension
 - [x] Automatic token refresh
+- [ ] Clarification of format of exploitability (integer, string, etc.)
+- [ ] Replace logos with updated ones for better designs
+- [ ] Need to package into a VSIX file format
+- [ ] Discuss publication of extension on Extension Marketplace
 - [ ] Scan history and comparison
 - [ ] Custom scan configurations
 - [ ] Export reports (PDF, CSV)
