@@ -4,7 +4,7 @@
   import Dashboard from './components/Dashboard.svelte';
   import SecurityResults from './components/SecurityResults.svelte';
   import Profile from './components/Profile.svelte';
-  import { authStore, resultsStore, profileStore } from './stores';
+  import { authStore, resultsStore, profileStore, dashboardStore } from './stores';
   import vscode from './vscode.js';
 
   function showVSCodeMessage(message) {
@@ -21,9 +21,6 @@
     console.log('🚀 App mounted!');
     
     window.addEventListener('message', handleMessage);
-
-    // Don't check session immediately - let the extension do it first
-    // The extension will send restoreSession or noSession message
 
     return () => {
       window.removeEventListener('message', handleMessage);
@@ -50,6 +47,17 @@
         break;
       
       case 'loginError':
+        showVSCodeMessage(message.error);
+        isLoading = false;
+        break;
+      
+      case 'dashboardSuccess':
+        console.log('✅ Dashboard data loaded');
+        dashboardStore.set(message.dashboard);
+        isLoading = false;
+        break;
+      
+      case 'dashboardError':
         showVSCodeMessage(message.error);
         isLoading = false;
         break;
@@ -114,6 +122,7 @@
     authStore.set(null);
     resultsStore.set(null);
     profileStore.set(null);
+    dashboardStore.set(null);
     currentView = 'login';
     isLoading = false;
   }

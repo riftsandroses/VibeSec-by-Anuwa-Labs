@@ -1,5 +1,5 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { authStore, dashboardStore } from '../stores';
   import Header from './Header.svelte';
   import vscode from '../vscode.js';
@@ -9,19 +9,39 @@
   let tokens;
   authStore.subscribe(value => {
     tokens = value;
-    console.log('🔑 Tokens updated:', tokens); // Add this);
+    console.log('🔑 Tokens updated:', tokens);
   });
 
-  // Mock dashboard data - replace with actual API data
   let insights = {
-    totalScans: 12,
-    criticalIssues: 3,
-    highIssues: 8,
-    mediumIssues: 15,
-    lowIssues: 22,
-    lastScanDate: '2025-10-18',
-    exploitableVulnerabilities: 5
+    totalScans: 0,
+    criticalIssues: 0,
+    highIssues: 0,
+    mediumIssues: 0,
+    lowIssues: 0,
+    lastScanDate: 'N/A',
+    exploitableVulnerabilities: 0
   };
+
+  dashboardStore.subscribe(value => {
+    if (value) {
+      insights = value;
+    }
+  });
+
+  onMount(() => {
+    // Fetch dashboard data when component mounts
+    if (tokens) {
+      fetchDashboardData();
+    }
+  });
+
+  function fetchDashboardData() {
+    dispatch('loading', true);
+    vscode.postMessage({
+      type: 'getDashboard',
+      tokens
+    });
+  }
 
   function startSecurityTest() {
     dispatch('loading', true);
@@ -115,7 +135,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>exploitable Vulnerabilities</span>
+          <span>Exploitable Vulnerabilities</span>
         </div>
         <div class="info-value">{insights.exploitableVulnerabilities}</div>
       </div>
