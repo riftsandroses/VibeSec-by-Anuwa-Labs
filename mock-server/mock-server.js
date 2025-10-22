@@ -287,7 +287,7 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
     });
   }
 
-  // Store username for multer filename
+  // Store username for multer middleware filename
   req.username = validation.data.username;
 
   if (!req.file) {
