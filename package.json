@@ -4,7 +4,6 @@
   "description": "Security testing and vulnerability scanning for your code",
   "version": "1.0.0",
   "publisher": "anuwalabs",
-  "license": "MIT",
   "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.105.0"

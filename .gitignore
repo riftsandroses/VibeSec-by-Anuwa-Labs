@@ -10,9 +10,6 @@ node_modules
 # Ignore VSCode test folders and files
 .vscode-test/
 
-# Ignore Visual Studio Code extensions
-*.vsix
-
 # Ignore all files in mock-server/uploads/
 mock-server/uploads/*
 
