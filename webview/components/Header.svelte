@@ -12,7 +12,7 @@
 
 <header class="header">
   <div class="logo">
-    <img src={iconSrc} alt="VibeSec Logo" width="48" height="48" />
+    <img src={iconSrc} alt="VibeSec Logo" width="64" height="64" />
     <span class="brand">VibeSec</span>
   </div>
 
@@ -27,7 +27,7 @@
   .header {
     background: var(--vscode-sideBar-background);
     border-bottom: 1px solid var(--vscode-panel-border);
-    padding: 12px 20px;
+    padding: 14px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -39,7 +39,7 @@
   .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
 
   .brand {

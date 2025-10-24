@@ -48,7 +48,7 @@
   <div class="login-card">
     <div class="logo-section">
       <div class="logo-icon">
-        <img src={iconSrc} alt="VibeSec Logo" width="48" height="48" />
+        <img src={iconSrc} alt="VibeSec Logo" width="90" height="90" />
       </div>
       <h1>VibeSec</h1>
       <p class="subtitle">by Anuwa Labs</p>
@@ -124,7 +124,7 @@
 
   .logo-icon {
     display: inline-block;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
   }
 
   h1 {
