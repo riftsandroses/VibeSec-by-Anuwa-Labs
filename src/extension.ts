@@ -615,27 +615,121 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
   private async handleFixVulnerability(vulnerability: any) {
     try {
+      // Validate input
+      if (!vulnerability.file || !vulnerability.fix || !vulnerability.lines) {
+        throw new Error('Invalid vulnerability data: missing required fields');
+      }
+
       await this.showNotification('fixVulnerability', `🔧 Fixing vulnerability in ${vulnerability.file}...`);
+      
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        throw new Error('No workspace folder open');
+      }
+
       const filePath = path.join(
-        vscode.workspace.workspaceFolders![0].uri.fsPath,
+        workspaceFolders[0].uri.fsPath,
         vulnerability.file
       );
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${vulnerability.file}`);
+      }
 
       const document = await vscode.workspace.openTextDocument(filePath);
       const edit = new vscode.WorkspaceEdit();
 
-      const lineRange = vulnerability.lines.split('-').map((n: string) => parseInt(n.trim()));
-      const startLine = lineRange[0] - 1;
-      const endLine = lineRange.length > 1 ? lineRange[1] - 1 : startLine;
+      // Parse line range more safely
+      let startLine: number;
+      let endLine: number;
+
+      const linesStr = String(vulnerability.lines).trim();
+      
+      if (linesStr.includes('-')) {
+        // Range format: "10-15"
+        const parts = linesStr.split('-');
+        if (parts.length !== 2) {
+          throw new Error(`Invalid line range format: ${vulnerability.lines}`);
+        }
+        
+        startLine = parseInt(parts[0].trim()) - 1;
+        endLine = parseInt(parts[1].trim()) - 1;
+        
+        if (isNaN(startLine) || isNaN(endLine)) {
+          throw new Error(`Invalid line numbers: ${vulnerability.lines}`);
+        }
+      } else {
+        // Single line number: "10"
+        const lineNum = parseInt(linesStr);
+        if (isNaN(lineNum)) {
+          throw new Error(`Invalid line number: ${vulnerability.lines}`);
+        }
+        startLine = lineNum - 1;
+        endLine = startLine;
+      }
+
+      // Validate line numbers
+      if (startLine < 0) {
+        throw new Error(`Line number cannot be negative: ${startLine + 1}`);
+      }
+      if (endLine >= document.lineCount) {
+        throw new Error(`Line number ${endLine + 1} exceeds file length (${document.lineCount} lines)`);
+      }
+      if (startLine > endLine) {
+        throw new Error(`Invalid line range: start line ${startLine + 1} is after end line ${endLine + 1}`);
+      }
+
+      // Get original indentation from the first line
+      const originalLine = document.lineAt(startLine).text;
+      const indentationMatch = originalLine.match(/^\s*/);
+      const indentation = indentationMatch ? indentationMatch[0] : '';
 
       const range = new vscode.Range(
         new vscode.Position(startLine, 0),
         new vscode.Position(endLine, document.lineAt(endLine).text.length)
       );
 
-      edit.replace(document.uri, range, vulnerability.fix);
+      // Convert escape sequences to actual characters
+      let fixedCode = vulnerability.fix;
+      
+      // Replace common escape sequences
+      fixedCode = fixedCode
+        .replace(/\\n/g, '\n')      // newlines
+        .replace(/\\t/g, '\t')      // tabs
+        .replace(/\\r/g, '\r')      // carriage returns
+        .replace(/\\"/g, '"')       // double quotes
+        .replace(/\\'/g, "'")       // single quotes
+        .replace(/\\\\/g, '\\');    // backslashes (do this last)
+      
+      // Check if fix needs indentation adjustment
+      if (indentation) {
+        const fixLines = fixedCode.split('\n');
+        
+        // Apply indentation to each line
+        fixedCode = fixLines.map((line: string, index: number) => {
+          // Don't indent empty lines
+          if (line.trim() === '') {
+            return line;
+          }
+          
+          // For the first line, replace any existing leading whitespace with original indentation
+          if (index === 0) {
+            return indentation + line.trimStart();
+          }
+          
+          // For subsequent lines, preserve their relative indentation
+          return indentation + line;
+        }).join('\n');
+      }
 
-      await vscode.workspace.applyEdit(edit);
+      edit.replace(document.uri, range, fixedCode);
+
+      const success = await vscode.workspace.applyEdit(edit);
+      if (!success) {
+        throw new Error('Failed to apply edit to document');
+      }
+
       await document.save();
 
       await this.showNotification('fixVulnerability', `✅ Fix applied successfully to ${vulnerability.file}`);
@@ -644,43 +738,78 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         file: vulnerability.file
       });
     } catch (error) {
-      await this.showNotification('fixVulnerability', '❌ Failed to apply fix', true);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to apply fix';
+      console.error('Error in handleFixVulnerability:', errorMessage, error);
+      
+      await this.showNotification('fixVulnerability', `❌ Failed to apply fix: ${errorMessage}`, true);
       this._view?.webview.postMessage({
         type: 'fixError',
-        error: error instanceof Error ? error.message : 'Failed to apply fix'
+        error: errorMessage
       });
     }
   }
 
   private async handleFixAll(vulnerabilities: any[], filter: string) {
-    const filtered = vulnerabilities.filter(v => {
-      if (filter === 'all') return true;
-      if (filter === 'highCritical') {
-        return v.severity === 'High' || v.severity === 'Critical';
+    try {
+      if (!vulnerabilities || vulnerabilities.length === 0) {
+        await this.showNotification('fixAll', '⚠️ No vulnerabilities to fix', true);
+        return;
       }
-      if (filter === 'exploitable') {
-        return v.exploitable === true;
-      }
-      return false;
-    });
 
-    await this.showNotification('fixAll', `🔧 Applying ${filtered.length} fixes...`);
+      const filtered = vulnerabilities.filter(v => {
+        if (filter === 'all') return true;
+        if (filter === 'highCritical') {
+          return v.severity === 'High' || v.severity === 'Critical';
+        }
+        if (filter === 'exploitable') {
+          return v.exploitable === true;
+        }
+        return false;
+      });
 
-    let successCount = 0;
-    for (const vuln of filtered) {
-      try {
-        await this.handleFixVulnerability(vuln);
-        successCount++;
-      } catch (error) {
-        console.error('Error fixing vulnerability:', error);
+      if (filtered.length === 0) {
+        await this.showNotification('fixAll', '⚠️ No vulnerabilities match the selected filter', true);
+        return;
       }
+
+      await this.showNotification('fixAll', `🔧 Applying ${filtered.length} fix${filtered.length !== 1 ? 'es' : ''}...`);
+
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      for (const vuln of filtered) {
+        try {
+          await this.handleFixVulnerability(vuln);
+          successCount++;
+        } catch (error) {
+          failedCount++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`${vuln.file}: ${errorMsg}`);
+          console.error('Error fixing vulnerability:', vuln.file, error);
+        }
+      }
+
+      const resultMessage = `✅ Applied ${successCount} of ${filtered.length} fix${filtered.length !== 1 ? 'es' : ''} successfully` +
+        (failedCount > 0 ? ` (${failedCount} failed)` : '');
+
+      await this.showNotification('fixAll', resultMessage);
+      
+      this._view?.webview.postMessage({
+        type: 'fixAllSuccess',
+        count: successCount,
+        total: filtered.length,
+        failed: failedCount,
+        errors: errors
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to apply fixes';
+      await this.showNotification('fixAll', `❌ Failed to apply fixes: ${errorMessage}`, true);
+      this._view?.webview.postMessage({
+        type: 'fixAllError',
+        error: errorMessage
+      });
     }
-
-    await this.showNotification('fixAll', `✅ Applied ${successCount} of ${filtered.length} fixes successfully`);
-    this._view?.webview.postMessage({
-      type: 'fixAllSuccess',
-      count: successCount
-    });
   }
 
   private async handleGetProfile(tokens: { access: string; refresh: string }) {

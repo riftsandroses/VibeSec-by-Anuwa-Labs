@@ -318,9 +318,9 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       fix: "const query = 'SELECT * FROM users WHERE id=?';\ndb.query(query, [userId]);"
     },
     {
-      name: "Cross-Site Scripting (XSS)",
-      file: "src/views/profile.html",
-      lines: "23-25",
+      name: "Test",
+      file: "urls.py",
+      lines: "5-7",
       severity: "High",
       impact: "Attackers can inject malicious scripts into web pages viewed by users",
       exploitable: true,
@@ -328,8 +328,8 @@ app.post('/api/v1/security-testing/', upload.single('file'), (req, res) => {
       description: "User input is rendered directly in HTML without proper encoding, allowing script injection.",
       cve: "CVE-2023-23456",
       recommendation: "Always sanitize and encode user input before rendering in HTML. Use a template engine with auto-escaping.",
-      codeSnippet: "<div>${userInput}</div>",
-      fix: "<div>${escapeHtml(userInput)}</div>"
+      codeSnippet: "router = DefaultRouter()\\nrouter.register(r'application-types', views.ApplicationTypeViewSet)\\nrouter.register(r'assessments', views.RiskAssessmentViewSet, basename='risk-assessment')",
+      fix: "router = DefaultRouter()\\nrouter.register(r'application-type', views.ApplicationTypeViewSet)\\nrouter.register(r'assessment', views.RiskAssessmentViewSet, basename='risk-assessment')"
     },
     {
       name: "Hardcoded Credentials",
