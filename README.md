@@ -381,7 +381,7 @@ Manual testing checklist:
 - [x] Provide CVSS Score parameter in SecurityResults.svelte/VulnerabilityTable.svelte file
 - [x] Clarification of format of exploitability (integer, string, etc.)
 - [x] Replace logos with updated ones for better designs
-- [ ] Need to package into a VSIX file format
+- [x] Need to package into a VSIX file format
 - [x] Discuss publication of extension on Extension Marketplace
 - [ ] Scan history and comparison
 - [ ] Custom scan configurations
