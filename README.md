@@ -365,7 +365,7 @@ Manual testing checklist:
 
 ## Known Limitations
 
-- Code replacement does not work reliably
+- **[RESOLVED]** Code replacement does not work reliably
 - Extension requires active internet connection
 - Workspace must be a folder (not individual files)
 - Large workspaces may take time to zip
