@@ -366,7 +366,7 @@ Manual testing checklist:
 ## Known Limitations
 
 - **[RESOLVED]** Code replacement does not work reliably
-- Extension requires active internet connection
+- **[NOT APPLICABLE]** Extension requires active internet connection
 - Workspace must be a folder (not individual files)
 - Large workspaces may take time to zip
 - Fix application requires write permissions
