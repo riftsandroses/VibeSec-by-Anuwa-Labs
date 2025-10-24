@@ -370,7 +370,7 @@ Manual testing checklist:
 - Workspace must be a folder (not individual files)
 - Large workspaces may take time to zip
 - Fix application requires write permissions
-- Add support to exclude environment and dependency folders (e.g., pyenv, node_modules) from zip
+- **[RESOLVED]** Add support to exclude environment and dependency folders (e.g., pyenv, node_modules) from zip
 
 ## Future Enhancements
 
