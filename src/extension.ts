@@ -497,6 +497,55 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Parse .gitignore file and return patterns
+   */
+  private parseGitignore(gitignorePath: string): string[] {
+    try {
+      if (!fs.existsSync(gitignorePath)) {
+        return [];
+      }
+
+      const content = fs.readFileSync(gitignorePath, 'utf-8');
+      const patterns: string[] = [];
+
+      content.split('\n').forEach(line => {
+        // Remove comments and trim whitespace
+        const trimmed = line.split('#')[0].trim();
+        
+        // Skip empty lines
+        if (!trimmed) {
+          return;
+        }
+
+        // Convert gitignore patterns to glob patterns
+        let pattern = trimmed;
+
+        // If pattern starts with /, it's relative to root
+        if (pattern.startsWith('/')) {
+          pattern = pattern.substring(1);
+        }
+
+        // If pattern ends with /, it's a directory
+        if (pattern.endsWith('/')) {
+          pattern = pattern + '**';
+        } else {
+          // Add /** for directories without trailing slash
+          // This ensures both the file/dir itself and its contents are ignored
+          patterns.push(pattern + '/**');
+        }
+
+        patterns.push(pattern);
+      });
+
+      console.log('Parsed gitignore patterns:', patterns);
+      return patterns;
+    } catch (error) {
+      console.error('Error parsing .gitignore:', error);
+      return [];
+    }
+  }
+
   private async createZipFile(sourcePath: string, outPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const output = fs.createWriteStream(outPath);
@@ -529,6 +578,7 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
 
       archive.pipe(output);
 
+      // Default exclusion patterns
       const excludePatterns = [
         'node_modules/**',
         '.git/**',
@@ -540,9 +590,22 @@ class VibeSecViewProvider implements vscode.WebviewViewProvider {
         '**/.DS_Store'
       ];
 
+      // Check for .gitignore and add its patterns
+      const gitignorePath = path.join(sourcePath, '.gitignore');
+      const gitignorePatterns = this.parseGitignore(gitignorePath);
+      
+      if (gitignorePatterns.length > 0) {
+        console.log(`Found .gitignore with ${gitignorePatterns.length} patterns`);
+        excludePatterns.push(...gitignorePatterns);
+      }
+
+      // Remove duplicates
+      const uniquePatterns = [...new Set(excludePatterns)];
+      console.log('Final exclusion patterns:', uniquePatterns);
+
       archive.glob('**/*', {
         cwd: sourcePath,
-        ignore: excludePatterns,
+        ignore: uniquePatterns,
         dot: true
       });
 
