@@ -367,10 +367,11 @@ Manual testing checklist:
 
 - **[RESOLVED]** Code replacement does not work reliably
 - **[NOT APPLICABLE]** Extension requires active internet connection
-- Workspace must be a folder (not individual files)
-- Large workspaces may take time to zip
-- Fix application requires write permissions
+- **[RESOLVED]** Workspace must be a folder (not individual files)
+- **[RESOLVED]** Large workspaces may take time to zip
+- **[RESOLVED]** Fix application requires write permissions
 - **[RESOLVED]** Add support to exclude environment and dependency folders (e.g., pyenv, node_modules) from zip
+- Need to integrate production back-end APIs with the extension
 
 ## Future Enhancements
 
